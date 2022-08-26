@@ -13,13 +13,13 @@ const WINDOW_WIDTH: f32 = 500.0;
 const WINDOW_HEIGHT: f32 = 700.0;
 const BACKGROUND_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
 
-const GRAVITY: f32 = 60.0;
-const SCROLLING_SPEED: f32 = 100.0;
+const GRAVITY: f32 = 40.0;
+const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
 const FLAPPY_STARTING_VELOCITY: Vec2 = Vec2::new(SCROLLING_SPEED, 0.0);
 const FLAPPY_SIZE: Vec3 = Vec3::new(40.0, 20.0, 0.0);
-const FLAPPY_JUMP_STRENGTH: f32 = 1000.0;
+const FLAPPY_JUMP_STRENGTH: f32 = 700.0;
 const FLAPPY_FALL_ROTATION_SPEED: f32 = -4.0;
 const FLAPPY_FALL_ROTATION_ANGLE_LIMIT: f32 = 5.0;
 const FLAPPY_COLOUR: Color = Color::rgb(0.3, 0.3, 0.7);
@@ -32,7 +32,7 @@ const FLOOR_POSITION_Y: f32 = -WINDOW_HEIGHT / 2.0 + FLOOR_THICKNESS;
 const FLOOR_STARTING_POSITION_X: f32 = -WINDOW_WIDTH / 2.0;
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
-const PIPE_GAP: f32 = 225.0;
+const PIPE_GAP: f32 = 200.0;
 const PIPE_WIDTH: f32 = 125.0;
 const PIPE_DISTANCE: f32 = 350.0;
 const DISTANCE_TO_FIRST_PIPE: f32 = 500.0;
@@ -48,8 +48,8 @@ fn main() {
             resizable: false,
             ..default()
         })
-        .add_plugins(DefaultPlugins)
         .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
         .add_system_set(
             SystemSet::new()
@@ -59,7 +59,8 @@ fn main() {
                 .with_system(flappy_apply_velocity)
                 .with_system(camera_side_scroll)
                 .with_system(floor_side_scroll)
-                .with_system(pipe_side_scroll),
+                .with_system(pipe_side_scroll)
+                .with_system(check_for_collusion),
         )
         .run();
 }
@@ -340,4 +341,62 @@ fn pipe_side_scroll(
         let gap_position_x = last_pipe_position_x + PIPE_DISTANCE * (PIPE_SET_ENTITY_COUNT as f32);
         PipeBundle::spawn_set(&mut commands, gap_position_x);
     }
+}
+
+fn check_for_collusion(
+    flappy_query: Query<&Transform, With<Flappy>>,
+    collider_query: Query<&Transform, With<Collider>>,
+) {
+    let flappy_transform = flappy_query.single();
+
+    // without rotation
+    let flappy_left_x = flappy_transform.translation.x - (flappy_transform.scale.x / 2.0);
+    let flappy_right_x = flappy_transform.translation.x + (flappy_transform.scale.x / 2.0);
+    let flappy_top_y = flappy_transform.translation.y + (flappy_transform.scale.y / 2.0);
+    let flappy_bottom_y = flappy_transform.translation.y - (flappy_transform.scale.y / 2.0);
+
+    let flappy_top_left = Vec2::new(flappy_left_x, flappy_top_y);
+    let flappy_top_right = Vec2::new(flappy_right_x, flappy_top_y);
+    let flappy_bottom_left = Vec2::new(flappy_left_x, flappy_bottom_y);
+    let flappy_bottom_right = Vec2::new(flappy_right_x, flappy_bottom_y);
+
+    // collision box with rotation
+    let (axis, angle) = flappy_transform.rotation.to_axis_angle();
+    let _flappy_collision_vertices = vec![
+        point_rotate_around_axis(&flappy_top_left, &axis.truncate(), angle),
+        point_rotate_around_axis(&flappy_top_right, &axis.truncate(), angle),
+        point_rotate_around_axis(&flappy_bottom_right, &axis.truncate(), angle),
+        point_rotate_around_axis(&flappy_bottom_left, &axis.truncate(), angle),
+    ];
+
+    for _collider_transform in &collider_query {
+        // TODO do actual collision check
+    }
+}
+
+//
+// -- UTILS
+//
+
+fn point_rotate(point: &Vec2, angle: f32) -> Vec2 {
+    let cos_angle = angle.cos();
+    let sin_angle = angle.sin();
+
+    Vec2 {
+        x: point.x * cos_angle - point.y * sin_angle,
+        y: point.y * cos_angle + point.x * sin_angle,
+    }
+}
+
+fn point_rotate_around_axis(point: &Vec2, axis: &Vec2, angle: f32) -> Vec2 {
+    let new_point = Vec2 {
+        x: point.x - axis.x,
+        y: point.y - axis.y,
+    };
+    let mut new_point = point_rotate(&new_point, angle);
+
+    new_point.x += axis.x;
+    new_point.y += axis.y;
+
+    new_point
 }
