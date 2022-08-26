@@ -1,9 +1,4 @@
-use bevy::{
-    prelude::*,
-    sprite::collide_aabb::{collide, Collision},
-    sprite::Anchor,
-    time::FixedTimestep,
-};
+use bevy::{prelude::*, time::FixedTimestep};
 use rand::Rng;
 
 // Defines the amount of time that should elapse between each physics step.
@@ -28,7 +23,7 @@ const FLAPPY_COLOUR: Color = Color::rgb(0.3, 0.3, 0.7);
 const FLOOR_ENTITY_COUNT: u32 = 3;
 const FLOOR_WIDTH: f32 = WINDOW_WIDTH;
 const FLOOR_THICKNESS: f32 = 30.0;
-const FLOOR_POSITION_Y: f32 = -WINDOW_HEIGHT / 2.0 + FLOOR_THICKNESS;
+const FLOOR_POSITION_Y: f32 = -WINDOW_HEIGHT / 2.0 + (FLOOR_THICKNESS / 2.0);
 const FLOOR_STARTING_POSITION_X: f32 = -WINDOW_WIDTH / 2.0;
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
@@ -87,7 +82,7 @@ enum PipePosition {
 }
 
 impl Pipe {
-    fn construct_sprite_bundle(translation: Vec3, scale: Vec3, anchor: Anchor) -> SpriteBundle {
+    fn construct_sprite_bundle(translation: Vec3, scale: Vec3) -> SpriteBundle {
         SpriteBundle {
             transform: Transform {
                 translation,
@@ -96,7 +91,6 @@ impl Pipe {
             },
             sprite: Sprite {
                 color: PIPE_COLOR,
-                anchor,
                 ..default()
             },
             ..default()
@@ -110,11 +104,11 @@ impl Pipe {
                 let window_top = WINDOW_HEIGHT / 2.0;
                 let height_to_top = window_top - pipe_bottom_y;
                 let pipe_height = height_to_top + 300.0;
+                let pipe_y = pipe_bottom_y + pipe_height / 2.0;
 
                 Self::construct_sprite_bundle(
-                    Vec3::new(gap_center.x, pipe_bottom_y, 0.0),
+                    Vec3::new(gap_center.x, pipe_y, 0.0),
                     Vec3::new(PIPE_WIDTH, pipe_height, 0.0),
-                    Anchor::BottomCenter,
                 )
             }
 
@@ -123,11 +117,11 @@ impl Pipe {
                 let window_bottom = -WINDOW_HEIGHT / 2.0;
                 let height_to_bottom = pipe_top_y - window_bottom;
                 let pipe_height = height_to_bottom + 300.0;
+                let pipe_y = pipe_top_y - pipe_height / 2.0;
 
                 Self::construct_sprite_bundle(
-                    Vec3::new(gap_center.x, pipe_top_y, 0.0),
+                    Vec3::new(gap_center.x, pipe_y, 0.0),
                     Vec3::new(PIPE_WIDTH, pipe_height, 0.0),
-                    Anchor::TopCenter,
                 )
             }
         }
@@ -184,7 +178,7 @@ struct FloorBundle {
 impl FloorBundle {
     fn new(index: u32) -> Self {
         let pos = index as f32;
-        let translation_x = FLOOR_STARTING_POSITION_X + (pos * FLOOR_WIDTH);
+        let translation_x = FLOOR_STARTING_POSITION_X + (FLOOR_WIDTH / 2.0) + (pos * FLOOR_WIDTH);
 
         FloorBundle {
             sprite: SpriteBundle {
@@ -195,7 +189,6 @@ impl FloorBundle {
                 },
                 sprite: Sprite {
                     color: Color::rgb(0.5, 0.5 + (pos / 10.0), 0.7),
-                    anchor: Anchor::TopLeft,
                     ..default()
                 },
                 ..default()
@@ -299,9 +292,10 @@ fn floor_side_scroll(
 
     // when a floor moved out of sight, reuse it by moving it to the back
     for mut floor_transform in &mut floor_query {
-        let floor_right_edge_position = floor_transform.translation.x + FLOOR_WIDTH;
+        let floor_right_edge_position = floor_transform.translation.x + (FLOOR_WIDTH / 2.0);
         let camera_left_edge_position = camera_transform.translation.x - (WINDOW_WIDTH / 2.0);
         let buffer = WINDOW_WIDTH / 2.0;
+
         if floor_right_edge_position + buffer < camera_left_edge_position {
             floor_transform.translation.x += FLOOR_WIDTH * (FLOOR_ENTITY_COUNT as f32);
         }
@@ -321,6 +315,7 @@ fn pipe_side_scroll(
         let pipe_right_edge_position = pipe_transform.translation.x + (PIPE_WIDTH / 2.0);
         let camera_left_edge_position = camera_transform.translation.x - (WINDOW_WIDTH / 2.0);
         let buffer = WINDOW_WIDTH / 2.0;
+
         if pipe_right_edge_position + buffer < camera_left_edge_position {
             pipes_to_remove.push((pipe_entity, pipe_transform));
         }
