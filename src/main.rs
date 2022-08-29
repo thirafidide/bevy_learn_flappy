@@ -94,12 +94,14 @@ struct Collider;
 #[derive(Default)]
 struct CollisionEvent;
 
-#[derive(Component)]
-struct Pipe;
-
 enum PipePosition {
     Top,
     Bottom,
+}
+
+#[derive(Component)]
+struct Pipe {
+    position: PipePosition,
 }
 
 impl Pipe {
@@ -118,8 +120,8 @@ impl Pipe {
         }
     }
 
-    fn sprite_bundle(position: PipePosition, gap_center: &Vec2) -> SpriteBundle {
-        match position {
+    fn sprite_bundle(&self, gap_center: &Vec2) -> SpriteBundle {
+        match self.position {
             PipePosition::Top => {
                 let pipe_bottom_y = gap_center.y + PIPE_GAP / 2.0;
                 let window_top = WINDOW_HEIGHT / 2.0;
@@ -159,16 +161,23 @@ struct PipeBundle {
 
 impl PipeBundle {
     fn new_set(gap_center: &Vec2) -> (Self, Self) {
+        let top_pipe = Pipe {
+            position: PipePosition::Top,
+        };
+        let bottom_pipe = Pipe {
+            position: PipePosition::Bottom,
+        };
+
         (
             PipeBundle {
-                sprite: Pipe::sprite_bundle(PipePosition::Top, gap_center),
+                sprite: top_pipe.sprite_bundle(gap_center),
                 collider: Collider,
-                pipe: Pipe,
+                pipe: top_pipe,
             },
             PipeBundle {
-                sprite: Pipe::sprite_bundle(PipePosition::Bottom, gap_center),
+                sprite: bottom_pipe.sprite_bundle(gap_center),
                 collider: Collider,
-                pipe: Pipe,
+                pipe: bottom_pipe,
             },
         )
     }
