@@ -22,6 +22,7 @@ const FLAPPY_COLOUR: Color = Color::rgb(0.3, 0.3, 0.7);
 // Max height flappy can jump above the window height
 const FLAPPY_MAX_FLY_HEIGHT_OVERFLOW: f32 = 400.0;
 const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + FLAPPY_MAX_FLY_HEIGHT_OVERFLOW;
+const FLAPPY_JUMP_ANGLE: f32 = 0.5;
 
 // for infinite floor, 3 floor entities reused when one move out of the window
 const FLOOR_ENTITY_COUNT: u32 = 3;
@@ -29,6 +30,7 @@ const FLOOR_WIDTH: f32 = WINDOW_WIDTH;
 const FLOOR_THICKNESS: f32 = 30.0;
 const FLOOR_POSITION_Y: f32 = -WINDOW_HEIGHT / 2.0 + (FLOOR_THICKNESS / 2.0);
 const FLOOR_STARTING_POSITION_X: f32 = -WINDOW_WIDTH / 2.0;
+const FLOOR_COLOR: Color = Color::rgb(0.5, 0.5, 0.7);
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
 const PIPE_GAP: f32 = 200.0;
@@ -207,7 +209,7 @@ impl FloorBundle {
                     ..default()
                 },
                 sprite: Sprite {
-                    color: Color::rgb(0.5, 0.5 + (pos / 10.0), 0.7),
+                    color: FLOOR_COLOR,
                     ..default()
                 },
                 ..default()
@@ -284,7 +286,7 @@ fn flappy_jump(
 
     if keyboard_input.just_pressed(KeyCode::Space) {
         flappy_velocity.y = FLAPPY_JUMP_STRENGTH;
-        flappy_transform.rotation = Quat::from_rotation_z(0.5);
+        flappy_transform.rotation = Quat::from_rotation_z(FLAPPY_JUMP_ANGLE);
     }
 }
 
@@ -305,13 +307,13 @@ fn flappy_apply_velocity(
     }
 
     // Falling "animation"
-    // flappy slowly angled down as it falls, but cap it angle limit
+    // flappy slowly angled down as it falls, but cap it to angle limit
     let quat_limit = Quat::from_rotation_z(FLAPPY_FALL_ROTATION_ANGLE_LIMIT);
     let angle_to_limit = flappy_transform.rotation.angle_between(quat_limit);
     let is_flappy_falling = flappy_velocity.y < 0.0;
-    let is_flappy_rotation_close_to_limit = angle_to_limit > 0.2;
+    let is_flappy_rotation_close_to_limit = angle_to_limit < 0.2;
 
-    if is_flappy_falling && is_flappy_rotation_close_to_limit {
+    if is_flappy_falling && !is_flappy_rotation_close_to_limit {
         flappy_transform.rotate_z(FLAPPY_FALL_ROTATION_SPEED * TIME_STEP);
     }
 }
