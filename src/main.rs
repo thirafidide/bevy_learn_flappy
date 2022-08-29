@@ -1,5 +1,6 @@
 use bevy::{prelude::*, time::FixedTimestep};
 use rand::Rng;
+use sepax2d::prelude::{sat_overlap, Polygon, AABB};
 
 // Defines the amount of time that should elapse between each physics step.
 const TIME_STEP: f32 = 1.0 / 60.0;
@@ -18,6 +19,9 @@ const FLAPPY_JUMP_STRENGTH: f32 = 700.0;
 const FLAPPY_FALL_ROTATION_SPEED: f32 = -4.0;
 const FLAPPY_FALL_ROTATION_ANGLE_LIMIT: f32 = 5.0;
 const FLAPPY_COLOUR: Color = Color::rgb(0.3, 0.3, 0.7);
+// Max height flappy can jump above the window height
+const FLAPPY_MAX_FLY_HEIGHT_OVERFLOW: f32 = 400.0;
+const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + FLAPPY_MAX_FLY_HEIGHT_OVERFLOW;
 
 // for infinite floor, 3 floor entities reused when one move out of the window
 const FLOOR_ENTITY_COUNT: u32 = 3;
@@ -46,18 +50,30 @@ fn main() {
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
+        .add_event::<CollisionEvent>()
+        .add_state(RunState::Playing)
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP.into()))
-                .with_system(flappy_gravity)
-                .with_system(flappy_jump)
-                .with_system(flappy_apply_velocity)
-                .with_system(camera_side_scroll)
-                .with_system(floor_side_scroll)
-                .with_system(pipe_side_scroll)
-                .with_system(check_for_collusion),
+                .with_system(check_for_collision)
+                .with_system(flappy_gravity.before(check_for_collision))
+                .with_system(flappy_jump.before(check_for_collision))
+                .with_system(flappy_apply_velocity.before(check_for_collision))
+                .with_system(camera_side_scroll.before(check_for_collision))
+                .with_system(floor_side_scroll.before(check_for_collision))
+                .with_system(pipe_side_scroll.before(check_for_collision)),
         )
         .run();
+}
+
+//
+// -- STATE
+//
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+enum RunState {
+    Playing,
+    GameOver,
 }
 
 //
@@ -72,6 +88,9 @@ struct Velocity(Vec2);
 
 #[derive(Component)]
 struct Collider;
+
+#[derive(Default)]
+struct CollisionEvent;
 
 #[derive(Component)]
 struct Pipe;
@@ -103,7 +122,7 @@ impl Pipe {
                 let pipe_bottom_y = gap_center.y + PIPE_GAP / 2.0;
                 let window_top = WINDOW_HEIGHT / 2.0;
                 let height_to_top = window_top - pipe_bottom_y;
-                let pipe_height = height_to_top + 300.0;
+                let pipe_height = height_to_top + FLAPPY_MAX_FLY_HEIGHT_OVERFLOW;
                 let pipe_y = pipe_bottom_y + pipe_height / 2.0;
 
                 Self::construct_sprite_bundle(
@@ -116,7 +135,7 @@ impl Pipe {
                 let pipe_top_y = gap_center.y - PIPE_GAP / 2.0;
                 let window_bottom = -WINDOW_HEIGHT / 2.0;
                 let height_to_bottom = pipe_top_y - window_bottom;
-                let pipe_height = height_to_bottom + 300.0;
+                let pipe_height = height_to_bottom + FLAPPY_MAX_FLY_HEIGHT_OVERFLOW;
                 let pipe_y = pipe_top_y - pipe_height / 2.0;
 
                 Self::construct_sprite_bundle(
@@ -183,7 +202,7 @@ impl FloorBundle {
         FloorBundle {
             sprite: SpriteBundle {
                 transform: Transform {
-                    translation: Vec3::new(translation_x, FLOOR_POSITION_Y, 0.0),
+                    translation: Vec3::new(translation_x, FLOOR_POSITION_Y, 2.0),
                     scale: Vec3::new(FLOOR_WIDTH, FLOOR_THICKNESS, 0.0),
                     ..default()
                 },
@@ -241,8 +260,12 @@ fn setup(mut commands: Commands) {
 // -- SYSTEM
 //
 
-fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
+fn flappy_gravity(run_state: Res<State<RunState>>, mut query: Query<&mut Velocity, With<Flappy>>) {
     let mut flappy_velocity = query.single_mut();
+
+    if *run_state.current() == RunState::GameOver {
+        return;
+    }
 
     // gravity
     flappy_velocity.y -= GRAVITY;
@@ -250,9 +273,14 @@ fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
 
 fn flappy_jump(
     keyboard_input: Res<Input<KeyCode>>,
+    run_state: Res<State<RunState>>,
     mut query: Query<(&mut Velocity, &mut Transform), With<Flappy>>,
 ) {
     let (mut flappy_velocity, mut flappy_transform) = query.single_mut();
+
+    if *run_state.current() == RunState::GameOver {
+        return;
+    }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
         flappy_velocity.y = FLAPPY_JUMP_STRENGTH;
@@ -260,11 +288,21 @@ fn flappy_jump(
     }
 }
 
-fn flappy_apply_velocity(mut query: Query<(&mut Transform, &Velocity), With<Flappy>>) {
+fn flappy_apply_velocity(
+    run_state: Res<State<RunState>>,
+    mut query: Query<(&mut Transform, &Velocity), With<Flappy>>,
+) {
     let (mut flappy_transform, flappy_velocity) = query.single_mut();
+
+    if *run_state.current() == RunState::GameOver {
+        return;
+    }
 
     flappy_transform.translation.x = flappy_transform.translation.x + flappy_velocity.x * TIME_STEP;
     flappy_transform.translation.y = flappy_transform.translation.y + flappy_velocity.y * TIME_STEP;
+    if flappy_transform.translation.y > FLAPPY_MAX_FLY_HEIGHT {
+        flappy_transform.translation.y = FLAPPY_MAX_FLY_HEIGHT;
+    }
 
     // Falling "animation"
     // flappy slowly angled down as it falls, but cap it angle limit
@@ -278,17 +316,29 @@ fn flappy_apply_velocity(mut query: Query<(&mut Transform, &Velocity), With<Flap
     }
 }
 
-fn camera_side_scroll(mut query: Query<&mut Transform, With<Camera2d>>) {
+fn camera_side_scroll(
+    run_state: Res<State<RunState>>,
+    mut query: Query<&mut Transform, With<Camera2d>>,
+) {
     let mut camera_transform = query.single_mut();
+
+    if *run_state.current() == RunState::GameOver {
+        return;
+    }
 
     camera_transform.translation.x += SCROLLING_SPEED * TIME_STEP;
 }
 
 fn floor_side_scroll(
+    run_state: Res<State<RunState>>,
     camera_query: Query<&Transform, With<Camera2d>>,
     mut floor_query: Query<&mut Transform, (With<Floor>, Without<Camera2d>)>,
 ) {
     let camera_transform = camera_query.single();
+
+    if *run_state.current() == RunState::GameOver {
+        return;
+    }
 
     // when a floor moved out of sight, reuse it by moving it to the back
     for mut floor_transform in &mut floor_query {
@@ -338,13 +388,14 @@ fn pipe_side_scroll(
     }
 }
 
-fn check_for_collusion(
+fn check_for_collision(
     flappy_query: Query<&Transform, With<Flappy>>,
     collider_query: Query<&Transform, With<Collider>>,
+    mut run_state: ResMut<State<RunState>>,
 ) {
     let flappy_transform = flappy_query.single();
 
-    // without rotation
+    // flappy without rotation
     let flappy_left_x = flappy_transform.translation.x - (flappy_transform.scale.x / 2.0);
     let flappy_right_x = flappy_transform.translation.x + (flappy_transform.scale.x / 2.0);
     let flappy_top_y = flappy_transform.translation.y + (flappy_transform.scale.y / 2.0);
@@ -356,16 +407,42 @@ fn check_for_collusion(
     let flappy_bottom_right = Vec2::new(flappy_right_x, flappy_bottom_y);
 
     // collision box with rotation
-    let (axis, angle) = flappy_transform.rotation.to_axis_angle();
-    let _flappy_collision_vertices = vec![
+    let (relative_axis, angle) = flappy_transform.rotation.to_axis_angle();
+    let axis = flappy_transform.translation + relative_axis;
+    let flappy_collision_vertices = vec![
         point_rotate_around_axis(&flappy_top_left, &axis.truncate(), angle),
         point_rotate_around_axis(&flappy_top_right, &axis.truncate(), angle),
         point_rotate_around_axis(&flappy_bottom_right, &axis.truncate(), angle),
         point_rotate_around_axis(&flappy_bottom_left, &axis.truncate(), angle),
-    ];
+    ]
+    .into_iter()
+    .map(|point| (point.x, point.y))
+    .collect();
 
-    for _collider_transform in &collider_query {
-        // TODO do actual collision check
+    let flappy_collision_polygon = Polygon::from_vertices((0.0, 0.0), flappy_collision_vertices);
+
+    for collider_transform in &collider_query {
+        let collider_top_left = (
+            collider_transform.translation.x - (collider_transform.scale.x / 2.0),
+            collider_transform.translation.y + (collider_transform.scale.y / 2.0),
+        );
+        let collider_shape = AABB::new(
+            collider_top_left,
+            collider_transform.scale.x,
+            // Doesn't work if the height is positive
+            // Either Sepax2D AABB actually use bottom left as position
+            // or I'm just bad at math graph
+            -collider_transform.scale.y,
+        );
+
+        let is_collide = sat_overlap(&flappy_collision_polygon, &collider_shape);
+
+        if *run_state.current() != RunState::GameOver && is_collide {
+            match run_state.set(RunState::GameOver) {
+                Err(message) => println!("{message:?}"),
+                _ => (),
+            }
+        }
     }
 }
 

@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bevy = { version = "0.8.0", features = ["dynamic"] }
 rand = "0.8.5"
+sepax2d = "0.3.7"
 
 [profile.dev]
 opt-level = 1
