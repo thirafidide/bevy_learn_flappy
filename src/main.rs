@@ -53,7 +53,19 @@ fn main() {
                 .with_system(pipe_side_scroll.before(check_for_collision))
                 .with_system(update_current_score.after(check_for_collision)),
         )
-        .add_system_set(SystemSet::on_enter(RunState::GameOver).with_system(update_best_score))
+        .add_system_set(
+            SystemSet::on_enter(RunState::GameOver)
+                .with_system(update_best_score)
+                .with_system(flappy_forward_stop),
+        )
+        .add_system_set(
+            SystemSet::on_update(RunState::GameOver)
+                .with_system(gameover_input)
+                .with_system(flappy_gravity)
+                .with_system(flappy_apply_velocity),
+        )
+        .add_system_set(SystemSet::on_enter(RunState::Cleanup).with_system(reset_setup))
+        .add_system_set(SystemSet::on_update(RunState::Cleanup).with_system(cleanup_finished))
         .run();
 }
 
@@ -65,6 +77,7 @@ fn main() {
 enum RunState {
     Playing,
     GameOver,
+    Cleanup,
 }
 
 #[derive(Debug, Clone)]
@@ -86,6 +99,19 @@ impl Scoreboard {
 // -- SETUP
 //
 
+fn setup_floor(commands: &mut Commands) {
+    for i in 0..FLOOR_ENTITY_COUNT {
+        commands.spawn_bundle(FloorBundle::new(i));
+    }
+}
+
+fn setup_pipes(commands: &mut Commands) {
+    for i in 0..PIPE_SET_ENTITY_COUNT {
+        let gap_position_x = DISTANCE_TO_FIRST_PIPE + (PIPE_DISTANCE * (i as f32));
+        PipeBundle::spawn_set(commands, gap_position_x)
+    }
+}
+
 fn setup(mut commands: Commands) {
     // Camera
     commands.spawn_bundle(Camera2dBundle::default());
@@ -96,16 +122,37 @@ fn setup(mut commands: Commands) {
         FLAPPY_STARTING_VELOCITY,
     ));
 
-    // Floor
-    for i in 0..FLOOR_ENTITY_COUNT {
-        commands.spawn_bundle(FloorBundle::new(i));
+    setup_floor(&mut commands);
+    setup_pipes(&mut commands);
+}
+
+fn reset_setup(
+    mut commands: Commands,
+    mut camera_query: Query<&mut Transform, (With<Camera2d>, Without<Flappy>)>,
+    mut flappy_query: Query<(&mut Transform, &mut Velocity), With<Flappy>>,
+    floor_query: Query<Entity, With<Floor>>,
+    pipe_query: Query<Entity, With<Pipe>>,
+) {
+    let mut camera_transform = camera_query.single_mut();
+    let (mut flappy_transform, mut flappy_velocity) = flappy_query.single_mut();
+
+    let default_transform = Camera2dBundle::default().transform;
+    camera_transform.translation = default_transform.translation.clone();
+
+    flappy_transform.translation = FLAPPY_STARTING_POSITION;
+    flappy_transform.rotation = Quat::default();
+    flappy_velocity.0 = FLAPPY_STARTING_VELOCITY;
+
+    for floor_entity in floor_query.iter() {
+        commands.entity(floor_entity).despawn();
     }
 
-    // Pipe
-    for i in 0..PIPE_SET_ENTITY_COUNT {
-        let gap_position_x = DISTANCE_TO_FIRST_PIPE + (PIPE_DISTANCE * (i as f32));
-        PipeBundle::spawn_set(&mut commands, gap_position_x)
+    for pipe_entity in pipe_query.iter() {
+        commands.entity(pipe_entity).despawn();
     }
+
+    setup_floor(&mut commands);
+    setup_pipes(&mut commands);
 }
 
 //
@@ -130,6 +177,16 @@ fn update_best_score(mut scoreboard: ResMut<Scoreboard>) {
     if scoreboard.current_score > scoreboard.best_score {
         scoreboard.best_score = scoreboard.current_score;
     }
+}
+
+fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<State<RunState>>) {
+    if keyboard_input.just_pressed(KeyCode::Space) {
+        run_state.set(RunState::Cleanup).unwrap();
+    }
+}
+
+fn cleanup_finished(mut run_state: ResMut<State<RunState>>) {
+    run_state.set(RunState::Playing).unwrap();
 }
 
 fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
@@ -157,6 +214,12 @@ fn flappy_apply_velocity(
     let (flappy_transform, flappy_velocity) = query.single_mut();
 
     flappy::apply_velocity(flappy_transform, flappy_velocity, time.delta_seconds());
+}
+
+fn flappy_forward_stop(mut query: Query<&mut Velocity, With<Flappy>>) {
+    let mut flappy_velocity = query.single_mut();
+
+    flappy_velocity.x = 0.0;
 }
 
 fn camera_side_scroll(time: Res<Time>, mut query: Query<&mut Transform, With<Camera2d>>) {
