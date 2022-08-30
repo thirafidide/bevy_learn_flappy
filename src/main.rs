@@ -40,13 +40,16 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
         .add_state(RunState::Playing)
-        .add_system(check_for_collision)
-        .add_system(flappy_gravity.before(check_for_collision))
-        .add_system(flappy_jump.before(check_for_collision))
-        .add_system(flappy_apply_velocity.before(check_for_collision))
-        .add_system(camera_side_scroll.before(check_for_collision))
-        .add_system(floor_side_scroll.before(check_for_collision))
-        .add_system(pipe_side_scroll.before(check_for_collision))
+        .add_system_set(
+            SystemSet::on_update(RunState::Playing)
+                .with_system(check_for_collision)
+                .with_system(flappy_gravity.before(check_for_collision))
+                .with_system(flappy_jump.before(check_for_collision))
+                .with_system(flappy_apply_velocity.before(check_for_collision))
+                .with_system(camera_side_scroll.before(check_for_collision))
+                .with_system(floor_side_scroll.before(check_for_collision))
+                .with_system(pipe_side_scroll.before(check_for_collision)),
+        )
         .run();
 }
 
@@ -90,12 +93,8 @@ fn setup(mut commands: Commands) {
 // -- SYSTEM
 //
 
-fn flappy_gravity(run_state: Res<State<RunState>>, mut query: Query<&mut Velocity, With<Flappy>>) {
+fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
     let mut flappy_velocity = query.single_mut();
-
-    if *run_state.current() == RunState::GameOver {
-        return;
-    }
 
     // gravity
     flappy_velocity.y -= GRAVITY;
@@ -103,14 +102,9 @@ fn flappy_gravity(run_state: Res<State<RunState>>, mut query: Query<&mut Velocit
 
 fn flappy_jump(
     keyboard_input: Res<Input<KeyCode>>,
-    run_state: Res<State<RunState>>,
     mut query: Query<(&mut Velocity, &mut Transform), With<Flappy>>,
 ) {
     let (flappy_velocity, flappy_transform) = query.single_mut();
-
-    if *run_state.current() == RunState::GameOver {
-        return;
-    }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
         flappy::jump(flappy_transform, flappy_velocity);
@@ -119,42 +113,24 @@ fn flappy_jump(
 
 fn flappy_apply_velocity(
     time: Res<Time>,
-    run_state: Res<State<RunState>>,
     mut query: Query<(&mut Transform, &Velocity), With<Flappy>>,
 ) {
     let (flappy_transform, flappy_velocity) = query.single_mut();
 
-    if *run_state.current() == RunState::GameOver {
-        return;
-    }
-
     flappy::apply_velocity(flappy_transform, flappy_velocity, time.delta_seconds());
 }
 
-fn camera_side_scroll(
-    time: Res<Time>,
-    run_state: Res<State<RunState>>,
-    mut query: Query<&mut Transform, With<Camera2d>>,
-) {
+fn camera_side_scroll(time: Res<Time>, mut query: Query<&mut Transform, With<Camera2d>>) {
     let mut camera_transform = query.single_mut();
-
-    if *run_state.current() == RunState::GameOver {
-        return;
-    }
 
     camera_transform.translation.x += SCROLLING_SPEED * time.delta_seconds();
 }
 
 fn floor_side_scroll(
-    run_state: Res<State<RunState>>,
     camera_query: Query<&Transform, With<Camera2d>>,
     mut floor_query: Query<&mut Transform, (With<Floor>, Without<Camera2d>)>,
 ) {
     let camera_transform = camera_query.single();
-
-    if *run_state.current() == RunState::GameOver {
-        return;
-    }
 
     // when a floor moved out of sight, reuse it by moving it to the back
     for mut floor_transform in &mut floor_query {
@@ -229,11 +205,8 @@ fn check_for_collision(
 
         let is_collide = sat_overlap(&flappy_collision_polygon, &collider_shape);
 
-        if *run_state.current() != RunState::GameOver && is_collide {
-            match run_state.set(RunState::GameOver) {
-                Err(message) => println!("{message:?}"),
-                _ => (),
-            }
+        if is_collide {
+            run_state.set(RunState::GameOver).unwrap();
         }
     }
 }
