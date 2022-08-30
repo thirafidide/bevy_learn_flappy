@@ -2,13 +2,16 @@ use bevy::{prelude::*, time::FixedTimestep};
 use rand::Rng;
 use sepax2d::prelude::{sat_overlap, Polygon, AABB};
 
+mod collider;
+mod floor;
+mod window;
+
+use crate::collider::Collider;
+use crate::floor::{Floor, FloorBundle, FLOOR_WIDTH};
+use crate::window::*;
+
 // Defines the amount of time that should elapse between each physics step.
 const TIME_STEP: f32 = 1.0 / 60.0;
-
-const WINDOW_WIDTH: f32 = 500.0;
-const WINDOW_HEIGHT: f32 = 700.0;
-const BACKGROUND_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
-
 const GRAVITY: f32 = 40.0;
 const SCROLLING_SPEED: f32 = 150.0;
 
@@ -26,11 +29,6 @@ const FLAPPY_JUMP_ANGLE: f32 = 0.5;
 
 // for infinite floor, 3 floor entities reused when one move out of the window
 const FLOOR_ENTITY_COUNT: u32 = 3;
-const FLOOR_WIDTH: f32 = WINDOW_WIDTH;
-const FLOOR_THICKNESS: f32 = 30.0;
-const FLOOR_POSITION_Y: f32 = -WINDOW_HEIGHT / 2.0 + (FLOOR_THICKNESS / 2.0);
-const FLOOR_STARTING_POSITION_X: f32 = -WINDOW_WIDTH / 2.0;
-const FLOOR_COLOR: Color = Color::rgb(0.5, 0.5, 0.7);
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
 const PIPE_GAP: f32 = 200.0;
@@ -87,9 +85,6 @@ struct Flappy;
 
 #[derive(Component, Deref, DerefMut, Debug)]
 struct Velocity(Vec2);
-
-#[derive(Component)]
-struct Collider;
 
 #[derive(Default)]
 struct CollisionEvent;
@@ -191,41 +186,6 @@ impl PipeBundle {
         let (top_pipe, bottom_pipe) = Self::new_set(&gap_position);
         commands.spawn_bundle(top_pipe);
         commands.spawn_bundle(bottom_pipe);
-    }
-}
-
-#[derive(Component)]
-struct Floor;
-
-#[derive(Bundle)]
-struct FloorBundle {
-    #[bundle]
-    sprite: SpriteBundle,
-    collider: Collider,
-    floor: Floor,
-}
-
-impl FloorBundle {
-    fn new(index: u32) -> Self {
-        let pos = index as f32;
-        let translation_x = FLOOR_STARTING_POSITION_X + (FLOOR_WIDTH / 2.0) + (pos * FLOOR_WIDTH);
-
-        FloorBundle {
-            sprite: SpriteBundle {
-                transform: Transform {
-                    translation: Vec3::new(translation_x, FLOOR_POSITION_Y, 2.0),
-                    scale: Vec3::new(FLOOR_WIDTH, FLOOR_THICKNESS, 0.0),
-                    ..default()
-                },
-                sprite: Sprite {
-                    color: FLOOR_COLOR,
-                    ..default()
-                },
-                ..default()
-            },
-            collider: Collider,
-            floor: Floor,
-        }
     }
 }
 
