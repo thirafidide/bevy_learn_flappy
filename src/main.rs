@@ -37,9 +37,11 @@ fn main() {
             ..default()
         })
         .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .insert_resource(Scoreboard::new())
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
         .add_state(RunState::Playing)
+        .add_system_set(SystemSet::on_enter(RunState::Playing).with_system(reset_current_score))
         .add_system_set(
             SystemSet::on_update(RunState::Playing)
                 .with_system(check_for_collision)
@@ -48,8 +50,10 @@ fn main() {
                 .with_system(flappy_apply_velocity.before(check_for_collision))
                 .with_system(camera_side_scroll.before(check_for_collision))
                 .with_system(floor_side_scroll.before(check_for_collision))
-                .with_system(pipe_side_scroll.before(check_for_collision)),
+                .with_system(pipe_side_scroll.before(check_for_collision))
+                .with_system(update_current_score.after(check_for_collision)),
         )
+        .add_system_set(SystemSet::on_enter(RunState::GameOver).with_system(update_best_score))
         .run();
 }
 
@@ -61,6 +65,21 @@ fn main() {
 enum RunState {
     Playing,
     GameOver,
+}
+
+#[derive(Debug, Clone)]
+struct Scoreboard {
+    current_score: u32,
+    best_score: u32,
+}
+
+impl Scoreboard {
+    fn new() -> Self {
+        Self {
+            current_score: 0,
+            best_score: 0,
+        }
+    }
 }
 
 //
@@ -92,6 +111,26 @@ fn setup(mut commands: Commands) {
 //
 // -- SYSTEM
 //
+
+fn reset_current_score(mut scoreboard: ResMut<Scoreboard>) {
+    scoreboard.current_score = 0;
+}
+
+fn update_current_score(
+    mut scoreboard: ResMut<Scoreboard>,
+    flappy_query: Query<&Transform, With<Flappy>>,
+) {
+    let flappy_transform = flappy_query.single();
+
+    scoreboard.current_score =
+        ((flappy_transform.translation.x - DISTANCE_TO_FIRST_PIPE) / PIPE_DISTANCE).round() as u32;
+}
+
+fn update_best_score(mut scoreboard: ResMut<Scoreboard>) {
+    if scoreboard.current_score > scoreboard.best_score {
+        scoreboard.best_score = scoreboard.current_score;
+    }
+}
 
 fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
     let mut flappy_velocity = query.single_mut();
