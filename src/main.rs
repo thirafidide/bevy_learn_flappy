@@ -1,13 +1,14 @@
 use bevy::{prelude::*, time::FixedTimestep};
-use rand::Rng;
 use sepax2d::prelude::{sat_overlap, Polygon, AABB};
 
 mod collider;
 mod floor;
+mod pipe;
 mod window;
 
 use crate::collider::Collider;
 use crate::floor::{Floor, FloorBundle, FLOOR_WIDTH};
+use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
 use crate::window::*;
 
 // Defines the amount of time that should elapse between each physics step.
@@ -23,21 +24,15 @@ const FLAPPY_FALL_ROTATION_SPEED: f32 = -4.0;
 const FLAPPY_FALL_ROTATION_ANGLE_LIMIT: f32 = 5.0;
 const FLAPPY_COLOUR: Color = Color::rgb(0.3, 0.3, 0.7);
 // Max height flappy can jump above the window height
-const FLAPPY_MAX_FLY_HEIGHT_OVERFLOW: f32 = 400.0;
-const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + FLAPPY_MAX_FLY_HEIGHT_OVERFLOW;
+const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
 const FLAPPY_JUMP_ANGLE: f32 = 0.5;
 
 // for infinite floor, 3 floor entities reused when one move out of the window
 const FLOOR_ENTITY_COUNT: u32 = 3;
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
-const PIPE_GAP: f32 = 200.0;
-const PIPE_WIDTH: f32 = 125.0;
 const PIPE_DISTANCE: f32 = 350.0;
 const DISTANCE_TO_FIRST_PIPE: f32 = 500.0;
-const PIPE_GAP_MIN_Y: f32 = -200.0;
-const PIPE_GAP_MAX_Y: f32 = 200.0;
-const PIPE_COLOR: Color = Color::rgb(0.6, 0.85, 0.4);
 
 fn main() {
     App::new()
@@ -88,106 +83,6 @@ struct Velocity(Vec2);
 
 #[derive(Default)]
 struct CollisionEvent;
-
-enum PipePosition {
-    Top,
-    Bottom,
-}
-
-#[derive(Component)]
-struct Pipe {
-    position: PipePosition,
-}
-
-impl Pipe {
-    fn construct_sprite_bundle(translation: Vec3, scale: Vec3) -> SpriteBundle {
-        SpriteBundle {
-            transform: Transform {
-                translation,
-                scale,
-                ..default()
-            },
-            sprite: Sprite {
-                color: PIPE_COLOR,
-                ..default()
-            },
-            ..default()
-        }
-    }
-
-    fn sprite_bundle(&self, gap_center: &Vec2) -> SpriteBundle {
-        match self.position {
-            PipePosition::Top => {
-                let pipe_bottom_y = gap_center.y + PIPE_GAP / 2.0;
-                let window_top = WINDOW_HEIGHT / 2.0;
-                let height_to_top = window_top - pipe_bottom_y;
-                let pipe_height = height_to_top + FLAPPY_MAX_FLY_HEIGHT_OVERFLOW;
-                let pipe_y = pipe_bottom_y + pipe_height / 2.0;
-
-                Self::construct_sprite_bundle(
-                    Vec3::new(gap_center.x, pipe_y, 0.0),
-                    Vec3::new(PIPE_WIDTH, pipe_height, 0.0),
-                )
-            }
-
-            PipePosition::Bottom => {
-                let pipe_top_y = gap_center.y - PIPE_GAP / 2.0;
-                let window_bottom = -WINDOW_HEIGHT / 2.0;
-                let height_to_bottom = pipe_top_y - window_bottom;
-                let pipe_height = height_to_bottom + FLAPPY_MAX_FLY_HEIGHT_OVERFLOW;
-                let pipe_y = pipe_top_y - pipe_height / 2.0;
-
-                Self::construct_sprite_bundle(
-                    Vec3::new(gap_center.x, pipe_y, 0.0),
-                    Vec3::new(PIPE_WIDTH, pipe_height, 0.0),
-                )
-            }
-        }
-    }
-}
-
-#[derive(Bundle)]
-struct PipeBundle {
-    #[bundle]
-    sprite: SpriteBundle,
-    collider: Collider,
-    pipe: Pipe,
-}
-
-impl PipeBundle {
-    fn new_set(gap_center: &Vec2) -> (Self, Self) {
-        let top_pipe = Pipe {
-            position: PipePosition::Top,
-        };
-        let bottom_pipe = Pipe {
-            position: PipePosition::Bottom,
-        };
-
-        (
-            PipeBundle {
-                sprite: top_pipe.sprite_bundle(gap_center),
-                collider: Collider,
-                pipe: top_pipe,
-            },
-            PipeBundle {
-                sprite: bottom_pipe.sprite_bundle(gap_center),
-                collider: Collider,
-                pipe: bottom_pipe,
-            },
-        )
-    }
-
-    fn spawn_set(commands: &mut Commands, position_x: f32) {
-        let gap_position = Vec2::new(
-            position_x,
-            rand::thread_rng().gen_range(PIPE_GAP_MIN_Y..=PIPE_GAP_MAX_Y),
-        );
-
-        let (top_pipe, bottom_pipe) = Self::new_set(&gap_position);
-        commands.spawn_bundle(top_pipe);
-        commands.spawn_bundle(bottom_pipe);
-    }
-}
 
 //
 // -- SETUP
@@ -315,9 +210,8 @@ fn floor_side_scroll(
     for mut floor_transform in &mut floor_query {
         let floor_right_edge_position = floor_transform.translation.x + (FLOOR_WIDTH / 2.0);
         let camera_left_edge_position = camera_transform.translation.x - (WINDOW_WIDTH / 2.0);
-        let buffer = WINDOW_WIDTH / 2.0;
 
-        if floor_right_edge_position + buffer < camera_left_edge_position {
+        if floor_right_edge_position + WINDOW_BOUND_LIMIT < camera_left_edge_position {
             floor_transform.translation.x += FLOOR_WIDTH * (FLOOR_ENTITY_COUNT as f32);
         }
     }
@@ -335,9 +229,8 @@ fn pipe_side_scroll(
     for (pipe_entity, pipe_transform) in &pipes_query {
         let pipe_right_edge_position = pipe_transform.translation.x + (PIPE_WIDTH / 2.0);
         let camera_left_edge_position = camera_transform.translation.x - (WINDOW_WIDTH / 2.0);
-        let buffer = WINDOW_WIDTH / 2.0;
 
-        if pipe_right_edge_position + buffer < camera_left_edge_position {
+        if pipe_right_edge_position + WINDOW_BOUND_LIMIT < camera_left_edge_position {
             pipes_to_remove.push((pipe_entity, pipe_transform));
         }
     }
@@ -348,7 +241,10 @@ fn pipe_side_scroll(
         let last_pipe_position_x = pipes_to_remove[0].1.translation.x;
 
         // 2 pipes should be in a same set
-        assert!(pipes_to_remove[0].1.translation.x == pipes_to_remove[1].1.translation.x);
+        assert!(
+            (pipes_to_remove[0].1.translation.x - pipes_to_remove[1].1.translation.x).abs()
+                < f32::EPSILON
+        );
 
         for (pipe_entity, _) in pipes_to_remove {
             commands.entity(pipe_entity).despawn();
