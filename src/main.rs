@@ -1,4 +1,4 @@
-use bevy::{prelude::*, time::FixedTimestep};
+use bevy::prelude::*;
 use sepax2d::prelude::{sat_overlap, AABB};
 
 mod collider;
@@ -15,8 +15,6 @@ use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
 use crate::velocity::Velocity;
 use crate::window::*;
 
-// Defines the amount of time that should elapse between each physics step.
-const TIME_STEP: f32 = 1.0 / 60.0;
 const GRAVITY: f32 = 40.0;
 const SCROLLING_SPEED: f32 = 150.0;
 
@@ -42,17 +40,13 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
         .add_state(RunState::Playing)
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(TIME_STEP.into()))
-                .with_system(check_for_collision)
-                .with_system(flappy_gravity.before(check_for_collision))
-                .with_system(flappy_jump.before(check_for_collision))
-                .with_system(flappy_apply_velocity.before(check_for_collision))
-                .with_system(camera_side_scroll.before(check_for_collision))
-                .with_system(floor_side_scroll.before(check_for_collision))
-                .with_system(pipe_side_scroll.before(check_for_collision)),
-        )
+        .add_system(check_for_collision)
+        .add_system(flappy_gravity.before(check_for_collision))
+        .add_system(flappy_jump.before(check_for_collision))
+        .add_system(flappy_apply_velocity.before(check_for_collision))
+        .add_system(camera_side_scroll.before(check_for_collision))
+        .add_system(floor_side_scroll.before(check_for_collision))
+        .add_system(pipe_side_scroll.before(check_for_collision))
         .run();
 }
 
@@ -124,6 +118,7 @@ fn flappy_jump(
 }
 
 fn flappy_apply_velocity(
+    time: Res<Time>,
     run_state: Res<State<RunState>>,
     mut query: Query<(&mut Transform, &Velocity), With<Flappy>>,
 ) {
@@ -133,10 +128,11 @@ fn flappy_apply_velocity(
         return;
     }
 
-    flappy::apply_velocity(flappy_transform, flappy_velocity, TIME_STEP);
+    flappy::apply_velocity(flappy_transform, flappy_velocity, time.delta_seconds());
 }
 
 fn camera_side_scroll(
+    time: Res<Time>,
     run_state: Res<State<RunState>>,
     mut query: Query<&mut Transform, With<Camera2d>>,
 ) {
@@ -146,7 +142,7 @@ fn camera_side_scroll(
         return;
     }
 
-    camera_transform.translation.x += SCROLLING_SPEED * TIME_STEP;
+    camera_transform.translation.x += SCROLLING_SPEED * time.delta_seconds();
 }
 
 fn floor_side_scroll(
