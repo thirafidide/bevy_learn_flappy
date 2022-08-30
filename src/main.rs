@@ -1,14 +1,18 @@
 use bevy::{prelude::*, time::FixedTimestep};
-use sepax2d::prelude::{sat_overlap, Polygon, AABB};
+use sepax2d::prelude::{sat_overlap, AABB};
 
 mod collider;
+mod flappy;
 mod floor;
 mod pipe;
+mod velocity;
 mod window;
 
 use crate::collider::Collider;
+use crate::flappy::{Flappy, FlappyBundle};
 use crate::floor::{Floor, FloorBundle, FLOOR_WIDTH};
 use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
+use crate::velocity::Velocity;
 use crate::window::*;
 
 // Defines the amount of time that should elapse between each physics step.
@@ -18,14 +22,6 @@ const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
 const FLAPPY_STARTING_VELOCITY: Vec2 = Vec2::new(SCROLLING_SPEED, 0.0);
-const FLAPPY_SIZE: Vec3 = Vec3::new(40.0, 20.0, 0.0);
-const FLAPPY_JUMP_STRENGTH: f32 = 700.0;
-const FLAPPY_FALL_ROTATION_SPEED: f32 = -4.0;
-const FLAPPY_FALL_ROTATION_ANGLE_LIMIT: f32 = 5.0;
-const FLAPPY_COLOUR: Color = Color::rgb(0.3, 0.3, 0.7);
-// Max height flappy can jump above the window height
-const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
-const FLAPPY_JUMP_ANGLE: f32 = 0.5;
 
 // for infinite floor, 3 floor entities reused when one move out of the window
 const FLOOR_ENTITY_COUNT: u32 = 3;
@@ -45,7 +41,6 @@ fn main() {
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
-        .add_event::<CollisionEvent>()
         .add_state(RunState::Playing)
         .add_system_set(
             SystemSet::new()
@@ -72,19 +67,6 @@ enum RunState {
 }
 
 //
-// -- COMPONENT
-//
-
-#[derive(Component)]
-struct Flappy;
-
-#[derive(Component, Deref, DerefMut, Debug)]
-struct Velocity(Vec2);
-
-#[derive(Default)]
-struct CollisionEvent;
-
-//
 // -- SETUP
 //
 
@@ -93,22 +75,10 @@ fn setup(mut commands: Commands) {
     commands.spawn_bundle(Camera2dBundle::default());
 
     // Flappy
-    commands
-        .spawn()
-        .insert(Flappy)
-        .insert(Velocity(FLAPPY_STARTING_VELOCITY))
-        .insert_bundle(SpriteBundle {
-            transform: Transform {
-                translation: FLAPPY_STARTING_POSITION,
-                scale: FLAPPY_SIZE,
-                ..default()
-            },
-            sprite: Sprite {
-                color: FLAPPY_COLOUR,
-                ..default()
-            },
-            ..default()
-        });
+    commands.spawn_bundle(FlappyBundle::new(
+        FLAPPY_STARTING_POSITION,
+        FLAPPY_STARTING_VELOCITY,
+    ));
 
     // Floor
     for i in 0..FLOOR_ENTITY_COUNT {
@@ -142,15 +112,14 @@ fn flappy_jump(
     run_state: Res<State<RunState>>,
     mut query: Query<(&mut Velocity, &mut Transform), With<Flappy>>,
 ) {
-    let (mut flappy_velocity, mut flappy_transform) = query.single_mut();
+    let (flappy_velocity, flappy_transform) = query.single_mut();
 
     if *run_state.current() == RunState::GameOver {
         return;
     }
 
     if keyboard_input.just_pressed(KeyCode::Space) {
-        flappy_velocity.y = FLAPPY_JUMP_STRENGTH;
-        flappy_transform.rotation = Quat::from_rotation_z(FLAPPY_JUMP_ANGLE);
+        flappy::jump(flappy_transform, flappy_velocity);
     }
 }
 
@@ -158,28 +127,13 @@ fn flappy_apply_velocity(
     run_state: Res<State<RunState>>,
     mut query: Query<(&mut Transform, &Velocity), With<Flappy>>,
 ) {
-    let (mut flappy_transform, flappy_velocity) = query.single_mut();
+    let (flappy_transform, flappy_velocity) = query.single_mut();
 
     if *run_state.current() == RunState::GameOver {
         return;
     }
 
-    flappy_transform.translation.x = flappy_transform.translation.x + flappy_velocity.x * TIME_STEP;
-    flappy_transform.translation.y = flappy_transform.translation.y + flappy_velocity.y * TIME_STEP;
-    if flappy_transform.translation.y > FLAPPY_MAX_FLY_HEIGHT {
-        flappy_transform.translation.y = FLAPPY_MAX_FLY_HEIGHT;
-    }
-
-    // Falling "animation"
-    // flappy slowly angled down as it falls, but cap it to angle limit
-    let quat_limit = Quat::from_rotation_z(FLAPPY_FALL_ROTATION_ANGLE_LIMIT);
-    let angle_to_limit = flappy_transform.rotation.angle_between(quat_limit);
-    let is_flappy_falling = flappy_velocity.y < 0.0;
-    let is_flappy_rotation_close_to_limit = angle_to_limit < 0.2;
-
-    if is_flappy_falling && !is_flappy_rotation_close_to_limit {
-        flappy_transform.rotate_z(FLAPPY_FALL_ROTATION_SPEED * TIME_STEP);
-    }
+    flappy::apply_velocity(flappy_transform, flappy_velocity, TIME_STEP);
 }
 
 fn camera_side_scroll(
@@ -261,32 +215,7 @@ fn check_for_collision(
     mut run_state: ResMut<State<RunState>>,
 ) {
     let flappy_transform = flappy_query.single();
-
-    // flappy without rotation
-    let flappy_left_x = flappy_transform.translation.x - (flappy_transform.scale.x / 2.0);
-    let flappy_right_x = flappy_transform.translation.x + (flappy_transform.scale.x / 2.0);
-    let flappy_top_y = flappy_transform.translation.y + (flappy_transform.scale.y / 2.0);
-    let flappy_bottom_y = flappy_transform.translation.y - (flappy_transform.scale.y / 2.0);
-
-    let flappy_top_left = Vec2::new(flappy_left_x, flappy_top_y);
-    let flappy_top_right = Vec2::new(flappy_right_x, flappy_top_y);
-    let flappy_bottom_left = Vec2::new(flappy_left_x, flappy_bottom_y);
-    let flappy_bottom_right = Vec2::new(flappy_right_x, flappy_bottom_y);
-
-    // collision box with rotation
-    let (relative_axis, angle) = flappy_transform.rotation.to_axis_angle();
-    let axis = flappy_transform.translation + relative_axis;
-    let flappy_collision_vertices = vec![
-        point_rotate_around_axis(&flappy_top_left, &axis.truncate(), angle),
-        point_rotate_around_axis(&flappy_top_right, &axis.truncate(), angle),
-        point_rotate_around_axis(&flappy_bottom_right, &axis.truncate(), angle),
-        point_rotate_around_axis(&flappy_bottom_left, &axis.truncate(), angle),
-    ]
-    .into_iter()
-    .map(|point| (point.x, point.y))
-    .collect();
-
-    let flappy_collision_polygon = Polygon::from_vertices((0.0, 0.0), flappy_collision_vertices);
+    let flappy_collision_polygon = flappy::to_polygon(flappy_transform);
 
     for collider_transform in &collider_query {
         let collider_top_left = (
@@ -311,31 +240,4 @@ fn check_for_collision(
             }
         }
     }
-}
-
-//
-// -- UTILS
-//
-
-fn point_rotate(point: &Vec2, angle: f32) -> Vec2 {
-    let cos_angle = angle.cos();
-    let sin_angle = angle.sin();
-
-    Vec2 {
-        x: point.x * cos_angle - point.y * sin_angle,
-        y: point.y * cos_angle + point.x * sin_angle,
-    }
-}
-
-fn point_rotate_around_axis(point: &Vec2, axis: &Vec2, angle: f32) -> Vec2 {
-    let new_point = Vec2 {
-        x: point.x - axis.x,
-        y: point.y - axis.y,
-    };
-    let mut new_point = point_rotate(&new_point, angle);
-
-    new_point.x += axis.x;
-    new_point.y += axis.y;
-
-    new_point
 }
