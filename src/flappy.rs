@@ -14,11 +14,8 @@ const FLAPPY_SIZE: Vec3 = Vec3::new(
 );
 const FLAPPY_COLLISION_SIZE: Vec3 = Vec3::new(FLAPPY_SIZE.x * 0.65, FLAPPY_SIZE.y * 0.65, 0.0);
 const FLAPPY_JUMP_STRENGTH: f32 = 700.0;
-const FLAPPY_FALL_ROTATION_SPEED: f32 = -4.0;
-const FLAPPY_FALL_ROTATION_ANGLE_LIMIT: f32 = 5.0;
 // Max height flappy can jump above the window height
 const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
-const FLAPPY_JUMP_ANGLE: f32 = 0.5;
 
 #[derive(Component)]
 pub struct Flappy;
@@ -63,9 +60,8 @@ pub fn spawn(
 // -- System
 //
 
-pub fn jump(mut transform: Mut<Transform>, mut velocity: Mut<Velocity>) {
+pub fn jump(mut velocity: Mut<Velocity>) {
     velocity.y = FLAPPY_JUMP_STRENGTH;
-    transform.rotation = Quat::from_rotation_z(FLAPPY_JUMP_ANGLE);
 }
 
 pub fn apply_velocity(mut transform: Mut<Transform>, velocity: &Velocity, delta: f32) {
@@ -73,17 +69,6 @@ pub fn apply_velocity(mut transform: Mut<Transform>, velocity: &Velocity, delta:
     transform.translation.y = transform.translation.y + velocity.y * delta;
     if transform.translation.y > FLAPPY_MAX_FLY_HEIGHT {
         transform.translation.y = FLAPPY_MAX_FLY_HEIGHT;
-    }
-
-    // Falling "animation"
-    // flappy slowly angled down as it falls, but cap it to angle limit
-    let quat_limit = Quat::from_rotation_z(FLAPPY_FALL_ROTATION_ANGLE_LIMIT);
-    let angle_to_limit = transform.rotation.angle_between(quat_limit);
-    let is_falling = velocity.y < 0.0;
-    let is_rotation_close_to_limit = angle_to_limit < 0.2;
-
-    if is_falling && !is_rotation_close_to_limit {
-        transform.rotate_z(FLAPPY_FALL_ROTATION_SPEED * delta);
     }
 }
 

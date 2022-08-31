@@ -207,14 +207,11 @@ fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
     flappy_velocity.y -= GRAVITY;
 }
 
-fn flappy_jump(
-    keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<(&mut Velocity, &mut Transform), With<Flappy>>,
-) {
-    let (flappy_velocity, flappy_transform) = query.single_mut();
+fn flappy_jump(keyboard_input: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With<Flappy>>) {
+    let flappy_velocity = query.single_mut();
 
     if keyboard_input.just_pressed(KeyCode::Space) {
-        flappy::jump(flappy_transform, flappy_velocity);
+        flappy::jump(flappy_velocity);
     }
 }
 
