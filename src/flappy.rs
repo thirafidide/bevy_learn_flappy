@@ -44,15 +44,15 @@ pub fn spawn(
                 ..default()
             },
             sprite: TextureAtlasSprite {
-                index: 24,
                 flip_x: true,
                 ..default()
             },
             ..default()
         })
         .insert(Animation {
-            timer: Timer::from_seconds(0.1, true),
-            frames: vec![24, 25, 26],
+            timer: Timer::from_seconds(0.3, false),
+            frames: vec![25, 26, 24],
+            current_frame: 0,
         });
 }
 

@@ -1,3 +1,4 @@
+use animation::AnimationReplayEvent;
 use bevy::{prelude::*, render::texture::ImageSettings};
 use sepax2d::prelude::{sat_overlap, AABB};
 
@@ -207,11 +208,16 @@ fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
     flappy_velocity.y -= GRAVITY;
 }
 
-fn flappy_jump(keyboard_input: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With<Flappy>>) {
-    let flappy_velocity = query.single_mut();
+fn flappy_jump(
+    mut replay_event: EventWriter<AnimationReplayEvent>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<(Entity, &mut Velocity), With<Flappy>>,
+) {
+    let (flappy_entity, flappy_velocity) = query.single_mut();
 
     if keyboard_input.just_pressed(KeyCode::Space) {
         flappy::jump(flappy_velocity);
+        replay_event.send(AnimationReplayEvent(flappy_entity));
     }
 }
 
