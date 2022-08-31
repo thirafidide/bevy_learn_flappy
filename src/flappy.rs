@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use sepax2d::polygon::Polygon;
 
+use crate::animation::Animation;
 use crate::velocity::Velocity;
 use crate::window::*;
 
@@ -51,6 +52,10 @@ pub fn spawn(
                 ..default()
             },
             ..default()
+        })
+        .insert(Animation {
+            timer: Timer::from_seconds(0.1, true),
+            frames: vec![24, 25, 26],
         });
 }
 

@@ -1,6 +1,7 @@
 use bevy::{prelude::*, render::texture::ImageSettings};
 use sepax2d::prelude::{sat_overlap, AABB};
 
+mod animation;
 mod collider;
 mod flappy;
 mod floor;
@@ -8,6 +9,7 @@ mod pipe;
 mod velocity;
 mod window;
 
+use crate::animation::AnimationPlugin;
 use crate::collider::Collider;
 use crate::flappy::Flappy;
 use crate::floor::{Floor, FloorBundle, FLOOR_WIDTH};
@@ -40,6 +42,7 @@ fn main() {
         .insert_resource(ImageSettings::default_nearest())
         .insert_resource(Scoreboard::new())
         .add_plugins(DefaultPlugins)
+        .add_plugin(AnimationPlugin)
         .add_startup_system(setup)
         .add_state(RunState::Playing)
         .add_system_set(SystemSet::on_enter(RunState::Playing).with_system(reset_current_score))
