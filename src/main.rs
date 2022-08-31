@@ -6,6 +6,7 @@ mod animation;
 mod collider;
 mod flappy;
 mod floor;
+mod game_state;
 mod pipe;
 mod velocity;
 mod window;
@@ -14,6 +15,7 @@ use crate::animation::AnimationPlugin;
 use crate::collider::Collider;
 use crate::flappy::Flappy;
 use crate::floor::{Floor, FloorBundle, FLOOR_WIDTH};
+use crate::game_state::*;
 use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
 use crate::velocity::Velocity;
 use crate::window::*;
@@ -45,10 +47,9 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationPlugin)
         .add_startup_system(setup)
-        .add_state(RunState::Playing)
-        .add_system_set(SystemSet::on_enter(RunState::Playing).with_system(reset_current_score))
+        .add_state(GameState::Playing)
         .add_system_set(
-            SystemSet::on_update(RunState::Playing)
+            SystemSet::on_update(GameState::Playing)
                 .with_system(check_for_collision)
                 .with_system(flappy_gravity.before(check_for_collision))
                 .with_system(flappy_jump.before(check_for_collision))
@@ -59,30 +60,23 @@ fn main() {
                 .with_system(update_current_score.after(check_for_collision)),
         )
         .add_system_set(
-            SystemSet::on_enter(RunState::GameOver)
+            SystemSet::on_enter(GameState::GameOver)
                 .with_system(update_best_score)
                 .with_system(flappy_forward_stop),
         )
         .add_system_set(
-            SystemSet::on_update(RunState::GameOver)
+            SystemSet::on_update(GameState::GameOver)
                 .with_system(gameover_input)
                 .with_system(flappy_gravity)
                 .with_system(flappy_apply_velocity),
         )
-        .add_system_set(SystemSet::on_enter(RunState::Cleanup).with_system(reset_setup))
-        .add_system_set(SystemSet::on_update(RunState::Cleanup).with_system(cleanup_finished))
+        .add_system_set(
+            SystemSet::on_enter(GameState::Cleanup)
+                .with_system(reset_current_score)
+                .with_system(reset_setup),
+        )
+        .add_system_set(SystemSet::on_update(GameState::Cleanup).with_system(cleanup_finished))
         .run();
-}
-
-//
-// -- STATE
-//
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-enum RunState {
-    Playing,
-    GameOver,
-    Cleanup,
 }
 
 #[derive(Debug, Clone)]
@@ -191,14 +185,14 @@ fn update_best_score(mut scoreboard: ResMut<Scoreboard>) {
     }
 }
 
-fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<State<RunState>>) {
+fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<State<GameState>>) {
     if keyboard_input.just_pressed(KeyCode::Space) {
-        run_state.set(RunState::Cleanup).unwrap();
+        _ = run_state.set(GameState::Cleanup);
     }
 }
 
-fn cleanup_finished(mut run_state: ResMut<State<RunState>>) {
-    run_state.set(RunState::Playing).unwrap();
+fn cleanup_finished(mut run_state: ResMut<State<GameState>>) {
+    _ = run_state.set(GameState::Playing);
 }
 
 fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
@@ -300,7 +294,7 @@ fn pipe_side_scroll(
 fn check_for_collision(
     flappy_query: Query<&Transform, With<Flappy>>,
     collider_query: Query<&Transform, With<Collider>>,
-    mut run_state: ResMut<State<RunState>>,
+    mut run_state: ResMut<State<GameState>>,
 ) {
     let flappy_transform = flappy_query.single();
     let flappy_collision_polygon = flappy::to_polygon(flappy_transform);
@@ -322,7 +316,7 @@ fn check_for_collision(
         let is_collide = sat_overlap(&flappy_collision_polygon, &collider_shape);
 
         if is_collide {
-            run_state.set(RunState::GameOver).unwrap();
+            run_state.set(GameState::GameOver).unwrap();
         }
     }
 }
