@@ -14,7 +14,7 @@ mod window;
 use crate::animation::AnimationPlugin;
 use crate::collider::Collider;
 use crate::flappy::Flappy;
-use crate::floor::{Floor, FloorBundle, FLOOR_WIDTH};
+use crate::floor::{Floor, FloorPlugin};
 use crate::game_state::*;
 use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
 use crate::velocity::Velocity;
@@ -25,9 +25,6 @@ const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
 const FLAPPY_STARTING_VELOCITY: Vec2 = Vec2::new(SCROLLING_SPEED, 0.0);
-
-// for infinite floor, 3 floor entities reused when one move out of the window
-const FLOOR_ENTITY_COUNT: u32 = 3;
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
 const PIPE_DISTANCE: f32 = 350.0;
@@ -46,6 +43,7 @@ fn main() {
         .insert_resource(Scoreboard::new())
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationPlugin)
+        .add_plugin(FloorPlugin)
         .add_startup_system(setup)
         .add_state(GameState::Playing)
         .add_system_set(
@@ -55,7 +53,6 @@ fn main() {
                 .with_system(flappy_jump.before(check_for_collision))
                 .with_system(flappy_apply_velocity.before(check_for_collision))
                 .with_system(camera_side_scroll.before(check_for_collision))
-                .with_system(floor_side_scroll.before(check_for_collision))
                 .with_system(pipe_side_scroll.before(check_for_collision))
                 .with_system(update_current_score.after(check_for_collision)),
         )
@@ -98,12 +95,6 @@ impl Scoreboard {
 // -- SETUP
 //
 
-fn setup_floor(commands: &mut Commands) {
-    for i in 0..FLOOR_ENTITY_COUNT {
-        commands.spawn_bundle(FloorBundle::new(i));
-    }
-}
-
 fn setup_pipes(commands: &mut Commands) {
     for i in 0..PIPE_SET_ENTITY_COUNT {
         let gap_position_x = DISTANCE_TO_FIRST_PIPE + (PIPE_DISTANCE * (i as f32));
@@ -128,7 +119,7 @@ fn setup(
         FLAPPY_STARTING_VELOCITY,
     );
 
-    setup_floor(&mut commands);
+    floor::setup(&mut commands);
     setup_pipes(&mut commands);
 }
 
@@ -157,7 +148,7 @@ fn reset_setup(
         commands.entity(pipe_entity).despawn();
     }
 
-    setup_floor(&mut commands);
+    floor::setup(&mut commands);
     setup_pipes(&mut commands);
 }
 
@@ -234,23 +225,6 @@ fn camera_side_scroll(time: Res<Time>, mut query: Query<&mut Transform, With<Cam
     let mut camera_transform = query.single_mut();
 
     camera_transform.translation.x += SCROLLING_SPEED * time.delta_seconds();
-}
-
-fn floor_side_scroll(
-    camera_query: Query<&Transform, With<Camera2d>>,
-    mut floor_query: Query<&mut Transform, (With<Floor>, Without<Camera2d>)>,
-) {
-    let camera_transform = camera_query.single();
-
-    // when a floor moved out of sight, reuse it by moving it to the back
-    for mut floor_transform in &mut floor_query {
-        let floor_right_edge_position = floor_transform.translation.x + (FLOOR_WIDTH / 2.0);
-        let camera_left_edge_position = camera_transform.translation.x - (WINDOW_WIDTH / 2.0);
-
-        if floor_right_edge_position + WINDOW_BOUND_LIMIT < camera_left_edge_position {
-            floor_transform.translation.x += FLOOR_WIDTH * (FLOOR_ENTITY_COUNT as f32);
-        }
-    }
 }
 
 fn pipe_side_scroll(
