@@ -4,11 +4,17 @@ use sepax2d::polygon::Polygon;
 use crate::velocity::Velocity;
 use crate::window::*;
 
-const FLAPPY_SIZE: Vec3 = Vec3::new(40.0, 20.0, 0.0);
+const FLAPPY_SPRITE_SIZE: f32 = 24.0;
+const FLAPPY_SPRITE_SCALE: Vec3 = Vec3::splat(2.0);
+const FLAPPY_SIZE: Vec3 = Vec3::new(
+    FLAPPY_SPRITE_SCALE.x * FLAPPY_SPRITE_SIZE,
+    FLAPPY_SPRITE_SCALE.y * FLAPPY_SPRITE_SIZE,
+    0.0,
+);
+const FLAPPY_COLLISION_SIZE: Vec3 = Vec3::new(FLAPPY_SIZE.x * 0.65, FLAPPY_SIZE.y * 0.65, 0.0);
 const FLAPPY_JUMP_STRENGTH: f32 = 700.0;
 const FLAPPY_FALL_ROTATION_SPEED: f32 = -4.0;
 const FLAPPY_FALL_ROTATION_ANGLE_LIMIT: f32 = 5.0;
-const FLAPPY_COLOUR: Color = Color::rgb(0.3, 0.3, 0.7);
 // Max height flappy can jump above the window height
 const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
 const FLAPPY_JUMP_ANGLE: f32 = 0.5;
@@ -16,33 +22,36 @@ const FLAPPY_JUMP_ANGLE: f32 = 0.5;
 #[derive(Component)]
 pub struct Flappy;
 
-#[derive(Bundle)]
-pub struct FlappyBundle {
-    flappy: Flappy,
-    velocity: Velocity,
-    #[bundle]
-    sprite_bundle: SpriteBundle,
-}
+pub fn spawn(
+    commands: &mut Commands,
+    asset_server: Res<AssetServer>,
+    mut texture_atlas_map: ResMut<Assets<TextureAtlas>>,
+    position: Vec3,
+    velocity: Vec2,
+) {
+    let texture_handle = asset_server.load("characters.png");
+    let texture_atlas =
+        TextureAtlas::from_grid(texture_handle, Vec2::splat(FLAPPY_SPRITE_SIZE), 9, 3);
+    let texture_atlas_handle = texture_atlas_map.add(texture_atlas);
 
-impl FlappyBundle {
-    pub fn new(position: Vec3, velocity: Vec2) -> FlappyBundle {
-        FlappyBundle {
-            flappy: Flappy,
-            velocity: Velocity(velocity),
-            sprite_bundle: SpriteBundle {
-                transform: Transform {
-                    translation: position,
-                    scale: FLAPPY_SIZE,
-                    ..default()
-                },
-                sprite: Sprite {
-                    color: FLAPPY_COLOUR,
-                    ..default()
-                },
+    commands
+        .spawn()
+        .insert(Flappy)
+        .insert(Velocity(velocity))
+        .insert_bundle(SpriteSheetBundle {
+            texture_atlas: texture_atlas_handle,
+            transform: Transform {
+                translation: position,
+                scale: FLAPPY_SPRITE_SCALE,
                 ..default()
             },
-        }
-    }
+            sprite: TextureAtlasSprite {
+                index: 24,
+                flip_x: true,
+                ..default()
+            },
+            ..default()
+        });
 }
 
 //
@@ -75,10 +84,10 @@ pub fn apply_velocity(mut transform: Mut<Transform>, velocity: &Velocity, delta:
 
 pub fn to_polygon(transform: &Transform) -> Polygon {
     // flappy without rotation
-    let flappy_left_x = transform.translation.x - (transform.scale.x / 2.0);
-    let flappy_right_x = transform.translation.x + (transform.scale.x / 2.0);
-    let flappy_top_y = transform.translation.y + (transform.scale.y / 2.0);
-    let flappy_bottom_y = transform.translation.y - (transform.scale.y / 2.0);
+    let flappy_left_x = transform.translation.x - (FLAPPY_COLLISION_SIZE.x / 2.0);
+    let flappy_right_x = transform.translation.x + (FLAPPY_COLLISION_SIZE.x / 2.0);
+    let flappy_top_y = transform.translation.y + (FLAPPY_COLLISION_SIZE.y / 2.0);
+    let flappy_bottom_y = transform.translation.y - (FLAPPY_COLLISION_SIZE.y / 2.0);
 
     let flappy_top_left = Vec2::new(flappy_left_x, flappy_top_y);
     let flappy_top_right = Vec2::new(flappy_right_x, flappy_top_y);

@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::texture::ImageSettings};
 use sepax2d::prelude::{sat_overlap, AABB};
 
 mod collider;
@@ -9,7 +9,7 @@ mod velocity;
 mod window;
 
 use crate::collider::Collider;
-use crate::flappy::{Flappy, FlappyBundle};
+use crate::flappy::Flappy;
 use crate::floor::{Floor, FloorBundle, FLOOR_WIDTH};
 use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
 use crate::velocity::Velocity;
@@ -37,6 +37,7 @@ fn main() {
             ..default()
         })
         .insert_resource(ClearColor(BACKGROUND_COLOR))
+        .insert_resource(ImageSettings::default_nearest())
         .insert_resource(Scoreboard::new())
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
@@ -112,15 +113,22 @@ fn setup_pipes(commands: &mut Commands) {
     }
 }
 
-fn setup(mut commands: Commands) {
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    texture_atlas_map: ResMut<Assets<TextureAtlas>>,
+) {
     // Camera
     commands.spawn_bundle(Camera2dBundle::default());
 
     // Flappy
-    commands.spawn_bundle(FlappyBundle::new(
+    flappy::spawn(
+        &mut commands,
+        asset_server,
+        texture_atlas_map,
         FLAPPY_STARTING_POSITION,
         FLAPPY_STARTING_VELOCITY,
-    ));
+    );
 
     setup_floor(&mut commands);
     setup_pipes(&mut commands);
