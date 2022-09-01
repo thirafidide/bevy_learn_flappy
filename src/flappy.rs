@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use bevy::sprite::collide_aabb::{self, Collision};
 
 use crate::animation::Animation;
+use crate::gravity::GravityAffected;
 use crate::velocity::Velocity;
-use crate::window::*;
 
 const FLAPPY_SPRITE_SIZE: f32 = 24.0;
 const FLAPPY_SPRITE_SCALE: Vec3 = Vec3::splat(2.0);
@@ -34,6 +34,7 @@ pub fn spawn(
         .spawn()
         .insert(Flappy)
         .insert(Velocity(velocity))
+        .insert(GravityAffected)
         .insert_bundle(SpriteSheetBundle {
             texture_atlas: texture_atlas_handle,
             transform: Transform {

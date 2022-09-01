@@ -1,5 +1,6 @@
 use animation::AnimationReplayEvent;
 use bevy::{prelude::*, render::texture::ImageSettings};
+use gravity::GravityPlugin;
 use velocity::{ApplyVelocitySystem, VelocityPlugin};
 
 mod animation;
@@ -7,6 +8,7 @@ mod collider;
 mod flappy;
 mod floor;
 mod game_state;
+mod gravity;
 mod pipe;
 mod velocity;
 mod window;
@@ -20,7 +22,6 @@ use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
 use crate::velocity::Velocity;
 use crate::window::*;
 
-const GRAVITY: f32 = 40.0;
 const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
@@ -46,13 +47,13 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationPlugin)
         .add_plugin(VelocityPlugin)
+        .add_plugin(GravityPlugin)
         .add_plugin(FloorPlugin)
         .add_startup_system(setup)
         .add_state(GameState::Playing)
         .add_system_set(
             SystemSet::on_update(GameState::Playing)
                 .with_system(check_for_collision)
-                .with_system(flappy_gravity.before(check_for_collision))
                 .with_system(flappy_jump.before(check_for_collision))
                 .with_system(flappy_limit_movement.after(ApplyVelocitySystem))
                 .with_system(camera_side_scroll.before(check_for_collision))
@@ -64,11 +65,7 @@ fn main() {
                 .with_system(update_best_score)
                 .with_system(flappy_forward_stop),
         )
-        .add_system_set(
-            SystemSet::on_update(GameState::GameOver)
-                .with_system(gameover_input)
-                .with_system(flappy_gravity),
-        )
+        .add_system_set(SystemSet::on_update(GameState::GameOver).with_system(gameover_input))
         .add_system_set(
             SystemSet::on_enter(GameState::Cleanup)
                 .with_system(reset_current_score)
@@ -186,13 +183,6 @@ fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<Sta
 
 fn cleanup_finished(mut run_state: ResMut<State<GameState>>) {
     _ = run_state.set(GameState::Playing);
-}
-
-fn flappy_gravity(mut query: Query<&mut Velocity, With<Flappy>>) {
-    let mut flappy_velocity = query.single_mut();
-
-    // gravity
-    flappy_velocity.y -= GRAVITY;
 }
 
 fn flappy_jump(
