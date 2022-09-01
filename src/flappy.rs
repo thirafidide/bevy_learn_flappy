@@ -14,8 +14,6 @@ const FLAPPY_SIZE: Vec3 = Vec3::new(
 );
 const FLAPPY_COLLISION_SIZE: Vec3 = Vec3::new(FLAPPY_SIZE.x * 0.65, FLAPPY_SIZE.y * 0.65, 0.0);
 const FLAPPY_JUMP_STRENGTH: f32 = 700.0;
-// Max height flappy can jump above the window height
-const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
 
 #[derive(Component)]
 pub struct Flappy;
@@ -62,14 +60,6 @@ pub fn spawn(
 
 pub fn jump(mut velocity: Mut<Velocity>) {
     velocity.y = FLAPPY_JUMP_STRENGTH;
-}
-
-pub fn apply_velocity(mut transform: Mut<Transform>, velocity: &Velocity, delta: f32) {
-    transform.translation.x = transform.translation.x + velocity.x * delta;
-    transform.translation.y = transform.translation.y + velocity.y * delta;
-    if transform.translation.y > FLAPPY_MAX_FLY_HEIGHT {
-        transform.translation.y = FLAPPY_MAX_FLY_HEIGHT;
-    }
 }
 
 pub fn collide(transform: &Transform, other_pos: Vec3, other_size: Vec2) -> Option<Collision> {

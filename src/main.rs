@@ -1,5 +1,6 @@
 use animation::AnimationReplayEvent;
 use bevy::{prelude::*, render::texture::ImageSettings};
+use velocity::{ApplyVelocitySystem, VelocityPlugin};
 
 mod animation;
 mod collider;
@@ -24,6 +25,8 @@ const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
 const FLAPPY_STARTING_VELOCITY: Vec2 = Vec2::new(SCROLLING_SPEED, 0.0);
+// Max height flappy can jump above the window height
+const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
 const PIPE_DISTANCE: f32 = 350.0;
@@ -42,6 +45,7 @@ fn main() {
         .insert_resource(Scoreboard::new())
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationPlugin)
+        .add_plugin(VelocityPlugin)
         .add_plugin(FloorPlugin)
         .add_startup_system(setup)
         .add_state(GameState::Playing)
@@ -50,7 +54,7 @@ fn main() {
                 .with_system(check_for_collision)
                 .with_system(flappy_gravity.before(check_for_collision))
                 .with_system(flappy_jump.before(check_for_collision))
-                .with_system(flappy_apply_velocity.before(check_for_collision))
+                .with_system(flappy_limit_movement.after(ApplyVelocitySystem))
                 .with_system(camera_side_scroll.before(check_for_collision))
                 .with_system(pipe_side_scroll.before(check_for_collision))
                 .with_system(update_current_score.after(check_for_collision)),
@@ -63,8 +67,7 @@ fn main() {
         .add_system_set(
             SystemSet::on_update(GameState::GameOver)
                 .with_system(gameover_input)
-                .with_system(flappy_gravity)
-                .with_system(flappy_apply_velocity),
+                .with_system(flappy_gravity),
         )
         .add_system_set(
             SystemSet::on_enter(GameState::Cleanup)
@@ -205,13 +208,12 @@ fn flappy_jump(
     }
 }
 
-fn flappy_apply_velocity(
-    time: Res<Time>,
-    mut query: Query<(&mut Transform, &Velocity), With<Flappy>>,
-) {
-    let (flappy_transform, flappy_velocity) = query.single_mut();
+fn flappy_limit_movement(mut query: Query<&mut Transform, With<Flappy>>) {
+    let mut flappy_transform = query.single_mut();
 
-    flappy::apply_velocity(flappy_transform, flappy_velocity, time.delta_seconds());
+    if flappy_transform.translation.y > FLAPPY_MAX_FLY_HEIGHT {
+        flappy_transform.translation.y = FLAPPY_MAX_FLY_HEIGHT;
+    }
 }
 
 fn flappy_forward_stop(mut query: Query<&mut Velocity, With<Flappy>>) {
