@@ -1,6 +1,5 @@
 use animation::AnimationReplayEvent;
 use bevy::{prelude::*, render::texture::ImageSettings};
-use sepax2d::prelude::{sat_overlap, AABB};
 
 mod animation;
 mod collider;
@@ -271,25 +270,15 @@ fn check_for_collision(
     mut run_state: ResMut<State<GameState>>,
 ) {
     let flappy_transform = flappy_query.single();
-    let flappy_collision_polygon = flappy::to_polygon(flappy_transform);
 
     for collider_transform in &collider_query {
-        let collider_top_left = (
-            collider_transform.translation.x - (collider_transform.scale.x / 2.0),
-            collider_transform.translation.y + (collider_transform.scale.y / 2.0),
-        );
-        let collider_shape = AABB::new(
-            collider_top_left,
-            collider_transform.scale.x,
-            // Doesn't work if the height is positive
-            // Either Sepax2D AABB actually use bottom left as position
-            // or I'm just bad at math graph
-            -collider_transform.scale.y,
+        let collision = flappy::collide(
+            &flappy_transform,
+            collider_transform.translation,
+            collider_transform.scale.truncate(),
         );
 
-        let is_collide = sat_overlap(&flappy_collision_polygon, &collider_shape);
-
-        if is_collide {
+        if collision.is_some() {
             run_state.set(GameState::GameOver).unwrap();
         }
     }

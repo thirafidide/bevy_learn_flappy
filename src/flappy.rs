@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use sepax2d::polygon::Polygon;
+use bevy::sprite::collide_aabb::{self, Collision};
 
 use crate::animation::Animation;
 use crate::velocity::Velocity;
@@ -72,57 +72,11 @@ pub fn apply_velocity(mut transform: Mut<Transform>, velocity: &Velocity, delta:
     }
 }
 
-pub fn to_polygon(transform: &Transform) -> Polygon {
-    // flappy without rotation
-    let flappy_left_x = transform.translation.x - (FLAPPY_COLLISION_SIZE.x / 2.0);
-    let flappy_right_x = transform.translation.x + (FLAPPY_COLLISION_SIZE.x / 2.0);
-    let flappy_top_y = transform.translation.y + (FLAPPY_COLLISION_SIZE.y / 2.0);
-    let flappy_bottom_y = transform.translation.y - (FLAPPY_COLLISION_SIZE.y / 2.0);
-
-    let flappy_top_left = Vec2::new(flappy_left_x, flappy_top_y);
-    let flappy_top_right = Vec2::new(flappy_right_x, flappy_top_y);
-    let flappy_bottom_left = Vec2::new(flappy_left_x, flappy_bottom_y);
-    let flappy_bottom_right = Vec2::new(flappy_right_x, flappy_bottom_y);
-
-    // collision box with rotation
-    let (relative_axis, angle) = transform.rotation.to_axis_angle();
-    let axis = transform.translation + relative_axis;
-    let flappy_collision_vertices = vec![
-        point_rotate_around_axis(&flappy_top_left, &axis.truncate(), angle),
-        point_rotate_around_axis(&flappy_top_right, &axis.truncate(), angle),
-        point_rotate_around_axis(&flappy_bottom_right, &axis.truncate(), angle),
-        point_rotate_around_axis(&flappy_bottom_left, &axis.truncate(), angle),
-    ]
-    .into_iter()
-    .map(|point| (point.x, point.y))
-    .collect();
-
-    Polygon::from_vertices((0.0, 0.0), flappy_collision_vertices)
-}
-
-//
-// -- UTILS
-//
-
-fn point_rotate(point: &Vec2, angle: f32) -> Vec2 {
-    let cos_angle = angle.cos();
-    let sin_angle = angle.sin();
-
-    Vec2 {
-        x: point.x * cos_angle - point.y * sin_angle,
-        y: point.y * cos_angle + point.x * sin_angle,
-    }
-}
-
-fn point_rotate_around_axis(point: &Vec2, axis: &Vec2, angle: f32) -> Vec2 {
-    let new_point = Vec2 {
-        x: point.x - axis.x,
-        y: point.y - axis.y,
-    };
-    let mut new_point = point_rotate(&new_point, angle);
-
-    new_point.x += axis.x;
-    new_point.y += axis.y;
-
-    new_point
+pub fn collide(transform: &Transform, other_pos: Vec3, other_size: Vec2) -> Option<Collision> {
+    collide_aabb::collide(
+        transform.translation,
+        FLAPPY_COLLISION_SIZE.truncate(),
+        other_pos,
+        other_size,
+    )
 }
