@@ -39,12 +39,13 @@ impl FloorBundle {
     pub fn new(index: u32) -> Self {
         let pos = index as f32;
         let translation_x = FLOOR_STARTING_POSITION_X + (FLOOR_WIDTH / 2.0) + (pos * FLOOR_WIDTH);
+        let scale = Vec3::new(FLOOR_WIDTH, FLOOR_THICKNESS, 0.0);
 
         FloorBundle {
             sprite: SpriteBundle {
                 transform: Transform {
                     translation: Vec3::new(translation_x, FLOOR_POSITION_Y, 2.0),
-                    scale: Vec3::new(FLOOR_WIDTH, FLOOR_THICKNESS, 0.0),
+                    scale,
                     ..default()
                 },
                 sprite: Sprite {
@@ -53,7 +54,7 @@ impl FloorBundle {
                 },
                 ..default()
             },
-            collider: Collider,
+            collider: Collider::new(scale.truncate()),
             floor: Floor,
         }
     }

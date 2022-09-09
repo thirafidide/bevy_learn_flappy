@@ -109,17 +109,24 @@ fn flappy_forward_stop(mut query: Query<&mut Velocity, With<Flappy>>) {
 
 fn check_for_collision(
     flappy_query: Query<&Transform, With<Flappy>>,
-    collider_query: Query<&Transform, With<Collider>>,
+    collider_query: Query<(&Transform, &Collider)>,
     mut run_state: ResMut<State<GameState>>,
 ) {
     let flappy_transform = flappy_query.single();
 
-    for collider_transform in &collider_query {
+    for (collider_transform, collider) in &collider_query {
+        let collider_relative_position = collider.position();
+        let collider_position = Vec3::new(
+            collider_transform.translation.x + collider_relative_position.x,
+            collider_transform.translation.y + collider_relative_position.y,
+            collider_transform.translation.z + collider_relative_position.z,
+        );
+
         let collision = collide_aabb::collide(
             flappy_transform.translation,
             FLAPPY_COLLISION_SIZE.truncate(),
-            collider_transform.translation,
-            collider_transform.scale.truncate(),
+            collider_position,
+            *collider.scale(),
         );
 
         if collision.is_some() {

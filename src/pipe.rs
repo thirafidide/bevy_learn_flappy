@@ -87,12 +87,24 @@ impl PipeBundle {
         (
             PipeBundle {
                 sprite: top_pipe.sprite_bundle(gap_center),
-                collider: Collider,
+                collider: Collider::new(
+                    top_pipe
+                        .sprite_bundle(gap_center)
+                        .transform
+                        .scale
+                        .truncate(),
+                ),
                 pipe: top_pipe,
             },
             PipeBundle {
                 sprite: bottom_pipe.sprite_bundle(gap_center),
-                collider: Collider,
+                collider: Collider::new(
+                    bottom_pipe
+                        .sprite_bundle(gap_center)
+                        .transform
+                        .scale
+                        .truncate(),
+                ),
                 pipe: bottom_pipe,
             },
         )
