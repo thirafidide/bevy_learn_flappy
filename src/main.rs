@@ -1,7 +1,8 @@
-use animation::AnimationReplayEvent;
 use bevy::{prelude::*, render::texture::ImageSettings};
+use flappy::FlappyPlugin;
 use gravity::GravityPlugin;
-use velocity::{ApplyVelocitySystem, VelocityPlugin};
+use score::ScorePlugin;
+use velocity::VelocityPlugin;
 
 mod animation;
 mod collider;
@@ -10,11 +11,11 @@ mod floor;
 mod game_state;
 mod gravity;
 mod pipe;
+mod score;
 mod velocity;
 mod window;
 
 use crate::animation::AnimationPlugin;
-use crate::collider::Collider;
 use crate::flappy::Flappy;
 use crate::floor::{Floor, FloorPlugin};
 use crate::game_state::*;
@@ -26,8 +27,6 @@ const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
 const FLAPPY_STARTING_VELOCITY: Vec2 = Vec2::new(SCROLLING_SPEED, 0.0);
-// Max height flappy can jump above the window height
-const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
 
 const PIPE_SET_ENTITY_COUNT: u32 = 3;
 const PIPE_DISTANCE: f32 = 350.0;
@@ -43,51 +42,24 @@ fn main() {
         })
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(ImageSettings::default_nearest())
-        .insert_resource(Scoreboard::new())
         .add_plugins(DefaultPlugins)
         .add_plugin(AnimationPlugin)
         .add_plugin(VelocityPlugin)
         .add_plugin(GravityPlugin)
         .add_plugin(FloorPlugin)
+        .add_plugin(FlappyPlugin)
+        .add_plugin(ScorePlugin)
         .add_startup_system(setup)
         .add_state(GameState::Playing)
         .add_system_set(
             SystemSet::on_update(GameState::Playing)
-                .with_system(check_for_collision)
-                .with_system(flappy_jump.before(check_for_collision))
-                .with_system(flappy_limit_movement.after(ApplyVelocitySystem))
-                .with_system(camera_side_scroll.before(check_for_collision))
-                .with_system(pipe_side_scroll.before(check_for_collision))
-                .with_system(update_current_score.after(check_for_collision)),
-        )
-        .add_system_set(
-            SystemSet::on_enter(GameState::GameOver)
-                .with_system(update_best_score)
-                .with_system(flappy_forward_stop),
+                .with_system(camera_side_scroll)
+                .with_system(pipe_side_scroll),
         )
         .add_system_set(SystemSet::on_update(GameState::GameOver).with_system(gameover_input))
-        .add_system_set(
-            SystemSet::on_enter(GameState::Cleanup)
-                .with_system(reset_current_score)
-                .with_system(reset_setup),
-        )
+        .add_system_set(SystemSet::on_enter(GameState::Cleanup).with_system(reset_setup))
         .add_system_set(SystemSet::on_update(GameState::Cleanup).with_system(cleanup_finished))
         .run();
-}
-
-#[derive(Debug, Clone)]
-struct Scoreboard {
-    current_score: u32,
-    best_score: u32,
-}
-
-impl Scoreboard {
-    fn new() -> Self {
-        Self {
-            current_score: 0,
-            best_score: 0,
-        }
-    }
 }
 
 //
@@ -155,26 +127,6 @@ fn reset_setup(
 // -- SYSTEM
 //
 
-fn reset_current_score(mut scoreboard: ResMut<Scoreboard>) {
-    scoreboard.current_score = 0;
-}
-
-fn update_current_score(
-    mut scoreboard: ResMut<Scoreboard>,
-    flappy_query: Query<&Transform, With<Flappy>>,
-) {
-    let flappy_transform = flappy_query.single();
-
-    scoreboard.current_score =
-        ((flappy_transform.translation.x - DISTANCE_TO_FIRST_PIPE) / PIPE_DISTANCE).round() as u32;
-}
-
-fn update_best_score(mut scoreboard: ResMut<Scoreboard>) {
-    if scoreboard.current_score > scoreboard.best_score {
-        scoreboard.best_score = scoreboard.current_score;
-    }
-}
-
 fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<State<GameState>>) {
     if keyboard_input.just_pressed(KeyCode::Space) {
         _ = run_state.set(GameState::Cleanup);
@@ -183,33 +135,6 @@ fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<Sta
 
 fn cleanup_finished(mut run_state: ResMut<State<GameState>>) {
     _ = run_state.set(GameState::Playing);
-}
-
-fn flappy_jump(
-    mut replay_event: EventWriter<AnimationReplayEvent>,
-    keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<(Entity, &mut Velocity), With<Flappy>>,
-) {
-    let (flappy_entity, flappy_velocity) = query.single_mut();
-
-    if keyboard_input.just_pressed(KeyCode::Space) {
-        flappy::jump(flappy_velocity);
-        replay_event.send(AnimationReplayEvent(flappy_entity));
-    }
-}
-
-fn flappy_limit_movement(mut query: Query<&mut Transform, With<Flappy>>) {
-    let mut flappy_transform = query.single_mut();
-
-    if flappy_transform.translation.y > FLAPPY_MAX_FLY_HEIGHT {
-        flappy_transform.translation.y = FLAPPY_MAX_FLY_HEIGHT;
-    }
-}
-
-fn flappy_forward_stop(mut query: Query<&mut Velocity, With<Flappy>>) {
-    let mut flappy_velocity = query.single_mut();
-
-    flappy_velocity.x = 0.0;
 }
 
 fn camera_side_scroll(time: Res<Time>, mut query: Query<&mut Transform, With<Camera2d>>) {
@@ -253,25 +178,5 @@ fn pipe_side_scroll(
 
         let gap_position_x = last_pipe_position_x + PIPE_DISTANCE * (PIPE_SET_ENTITY_COUNT as f32);
         PipeBundle::spawn_set(&mut commands, gap_position_x);
-    }
-}
-
-fn check_for_collision(
-    flappy_query: Query<&Transform, With<Flappy>>,
-    collider_query: Query<&Transform, With<Collider>>,
-    mut run_state: ResMut<State<GameState>>,
-) {
-    let flappy_transform = flappy_query.single();
-
-    for collider_transform in &collider_query {
-        let collision = flappy::collide(
-            &flappy_transform,
-            collider_transform.translation,
-            collider_transform.scale.truncate(),
-        );
-
-        if collision.is_some() {
-            run_state.set(GameState::GameOver).unwrap();
-        }
     }
 }
