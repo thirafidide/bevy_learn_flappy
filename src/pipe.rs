@@ -117,7 +117,15 @@ impl PipeBundle {
         );
 
         let (top_pipe, bottom_pipe) = Self::new_set(&gap_position);
-        commands.spawn_bundle(top_pipe);
-        commands.spawn_bundle(bottom_pipe);
+
+        commands
+            .spawn()
+            .insert(Name::new("Top Pipe"))
+            .insert_bundle(top_pipe);
+
+        commands
+            .spawn()
+            .insert(Name::new("Bottom Pipe"))
+            .insert_bundle(bottom_pipe);
     }
 }

@@ -1,4 +1,5 @@
 use bevy::{prelude::*, render::texture::ImageSettings};
+use bevy_inspector_egui::WorldInspectorPlugin;
 use flappy::FlappyPlugin;
 use gravity::GravityPlugin;
 use score::ScorePlugin;
@@ -43,6 +44,7 @@ fn main() {
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(ImageSettings::default_nearest())
         .add_plugins(DefaultPlugins)
+        .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(AnimationPlugin)
         .add_plugin(VelocityPlugin)
         .add_plugin(GravityPlugin)

@@ -66,7 +66,10 @@ impl FloorBundle {
 
 pub fn setup(commands: &mut Commands) {
     for i in 0..FLOOR_ENTITY_COUNT {
-        commands.spawn_bundle(FloorBundle::new(i));
+        commands
+            .spawn()
+            .insert(Name::new("Floor"))
+            .insert_bundle(FloorBundle::new(i));
     }
 }
 

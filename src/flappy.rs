@@ -53,6 +53,7 @@ pub fn spawn(
 
     commands
         .spawn()
+        .insert(Name::new("Flappy"))
         .insert(Flappy)
         .insert(Velocity(velocity))
         .insert(GravityAffected)
