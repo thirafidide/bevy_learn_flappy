@@ -16,6 +16,9 @@ enum PipePosition {
 }
 
 #[derive(Component)]
+pub struct PipeSet;
+
+#[derive(Component)]
 pub struct Pipe {
     position: PipePosition,
 }
@@ -46,7 +49,7 @@ impl Pipe {
                 let pipe_y = pipe_bottom_y + pipe_height / 2.0;
 
                 Self::construct_sprite_bundle(
-                    Vec3::new(gap_center.x, pipe_y, 0.0),
+                    Vec3::new(0.0, pipe_y, 0.0),
                     Vec3::new(PIPE_WIDTH, pipe_height, 0.0),
                 )
             }
@@ -59,7 +62,7 @@ impl Pipe {
                 let pipe_y = pipe_top_y - pipe_height / 2.0;
 
                 Self::construct_sprite_bundle(
-                    Vec3::new(gap_center.x, pipe_y, 0.0),
+                    Vec3::new(0.0, pipe_y, 0.0),
                     Vec3::new(PIPE_WIDTH, pipe_height, 0.0),
                 )
             }
@@ -120,12 +123,26 @@ impl PipeBundle {
 
         commands
             .spawn()
-            .insert(Name::new("Top Pipe"))
-            .insert_bundle(top_pipe);
+            .insert(PipeSet)
+            .insert(Name::new("Pipe Set"))
+            .insert(Transform::from_translation(Vec3::new(
+                gap_position.x,
+                0.0,
+                1.0,
+            )))
+            .insert(GlobalTransform::default())
+            .insert(Visibility::visible())
+            .insert(ComputedVisibility::default())
+            .with_children(|parent| {
+                parent
+                    .spawn()
+                    .insert(Name::new("Top Pipe"))
+                    .insert_bundle(top_pipe);
 
-        commands
-            .spawn()
-            .insert(Name::new("Bottom Pipe"))
-            .insert_bundle(bottom_pipe);
+                parent
+                    .spawn()
+                    .insert(Name::new("Bottom Pipe"))
+                    .insert_bundle(bottom_pipe);
+            });
     }
 }
