@@ -10,6 +10,7 @@ const PIPE_GAP_MIN_Y: f32 = -200.0;
 const PIPE_GAP_MAX_Y: f32 = 200.0;
 const PIPE_COLOR: Color = Color::rgb(0.6, 0.85, 0.4);
 
+#[derive(Debug)]
 enum PipePosition {
     Top,
     Bottom,
@@ -18,7 +19,7 @@ enum PipePosition {
 #[derive(Component)]
 pub struct PipeSet;
 
-#[derive(Component)]
+#[derive(Debug, Component)]
 pub struct Pipe {
     position: PipePosition,
 }

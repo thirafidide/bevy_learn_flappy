@@ -24,7 +24,7 @@ impl Plugin for FloorPlugin {
 // -- Component
 //
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Floor;
 
 #[derive(Bundle)]

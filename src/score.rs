@@ -45,7 +45,7 @@ impl Plugin for ScorePlugin {
         );
         app.add_system_set(SystemSet::on_enter(GameState::GameOver).with_system(update_best_score));
         app.add_system_set(
-            SystemSet::on_enter(GameState::Cleanup).with_system(reset_current_score),
+            SystemSet::on_exit(GameState::GameOver).with_system(reset_current_score),
         );
     }
 }

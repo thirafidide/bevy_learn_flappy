@@ -1,7 +1,8 @@
 use bevy::{prelude::*, render::texture::ImageSettings};
 use bevy_inspector_egui::WorldInspectorPlugin;
-use flappy::FlappyPlugin;
+use flappy::{FlappyCollider, FlappyPlugin};
 use gravity::GravityPlugin;
+use pipe::PipeSet;
 use score::ScorePlugin;
 use velocity::VelocityPlugin;
 
@@ -59,8 +60,7 @@ fn main() {
                 .with_system(pipe_side_scroll),
         )
         .add_system_set(SystemSet::on_update(GameState::GameOver).with_system(gameover_input))
-        .add_system_set(SystemSet::on_enter(GameState::Cleanup).with_system(reset_setup))
-        .add_system_set(SystemSet::on_update(GameState::Cleanup).with_system(cleanup_finished))
+        .add_system_set(SystemSet::on_exit(GameState::GameOver).with_system(reset_setup))
         .run();
 }
 
@@ -99,12 +99,21 @@ fn setup(
 fn reset_setup(
     mut commands: Commands,
     mut camera_query: Query<&mut Transform, (With<Camera2d>, Without<Flappy>)>,
-    mut flappy_query: Query<(&mut Transform, &mut Velocity), With<Flappy>>,
+    mut flappy_query: Query<(&mut Transform, &mut Velocity, &mut FlappyCollider), With<Flappy>>,
     floor_query: Query<Entity, With<Floor>>,
-    pipe_query: Query<Entity, With<Pipe>>,
+    pipe_set_query: Query<Entity, With<PipeSet>>,
 ) {
+    for floor_entity in floor_query.iter() {
+        commands.entity(floor_entity).despawn();
+    }
+
+    for pipe_set_entity in pipe_set_query.iter() {
+        commands.entity(pipe_set_entity).despawn_recursive();
+    }
+
     let mut camera_transform = camera_query.single_mut();
-    let (mut flappy_transform, mut flappy_velocity) = flappy_query.single_mut();
+    let (mut flappy_transform, mut flappy_velocity, mut flappy_collider) =
+        flappy_query.single_mut();
 
     let default_transform = Camera2dBundle::default().transform;
     camera_transform.translation = default_transform.translation.clone();
@@ -113,16 +122,10 @@ fn reset_setup(
     flappy_transform.rotation = Quat::default();
     flappy_velocity.0 = FLAPPY_STARTING_VELOCITY;
 
-    for floor_entity in floor_query.iter() {
-        commands.entity(floor_entity).despawn();
-    }
-
-    for pipe_entity in pipe_query.iter() {
-        commands.entity(pipe_entity).despawn();
-    }
-
     floor::setup(&mut commands);
     setup_pipes(&mut commands);
+
+    flappy_collider.enabled = true;
 }
 
 //
@@ -131,12 +134,8 @@ fn reset_setup(
 
 fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<State<GameState>>) {
     if keyboard_input.just_pressed(KeyCode::Space) {
-        _ = run_state.set(GameState::Cleanup);
+        _ = run_state.set(GameState::Playing);
     }
-}
-
-fn cleanup_finished(mut run_state: ResMut<State<GameState>>) {
-    _ = run_state.set(GameState::Playing);
 }
 
 fn camera_side_scroll(time: Res<Time>, mut query: Query<&mut Transform, With<Camera2d>>) {

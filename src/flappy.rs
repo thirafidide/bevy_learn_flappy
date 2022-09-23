@@ -23,15 +23,27 @@ const FLAPPY_MAX_FLY_HEIGHT: f32 = (WINDOW_HEIGHT / 2.0) + WINDOW_BOUND_LIMIT;
 #[derive(Component)]
 pub struct Flappy;
 
+#[derive(Component)]
+pub struct FlappyCollider {
+    pub enabled: bool,
+}
+
 pub struct FlappyPlugin;
 
 impl Plugin for FlappyPlugin {
     fn build(&self, app: &mut App) {
+        use bevy::transform::TransformSystem;
+
         app.add_system_set(
             SystemSet::on_update(GameState::Playing)
-                .with_system(check_for_collision)
-                .with_system(flappy_jump.before(check_for_collision))
+                .with_system(flappy_jump)
                 .with_system(flappy_limit_movement.after(ApplyVelocitySystem)),
+        );
+        app.add_system_set_to_stage(
+            CoreStage::PostUpdate,
+            SystemSet::new()
+                .with_system(check_for_collision)
+                .after(TransformSystem::TransformPropagate),
         );
         app.add_system_set(
             SystemSet::on_enter(GameState::GameOver).with_system(flappy_forward_stop),
@@ -57,6 +69,7 @@ pub fn spawn(
         .insert(Flappy)
         .insert(Velocity(velocity))
         .insert(GravityAffected)
+        .insert(FlappyCollider { enabled: true })
         .insert_bundle(SpriteSheetBundle {
             texture_atlas: texture_atlas_handle,
             transform: Transform {
@@ -102,18 +115,19 @@ fn flappy_limit_movement(mut query: Query<&mut Transform, With<Flappy>>) {
     }
 }
 
-fn flappy_forward_stop(mut query: Query<&mut Velocity, With<Flappy>>) {
-    let mut flappy_velocity = query.single_mut();
+fn flappy_forward_stop(mut query: Query<(&mut Velocity, &mut FlappyCollider), With<Flappy>>) {
+    let (mut flappy_velocity, mut flappy_collider) = query.single_mut();
 
     flappy_velocity.x = 0.0;
+    flappy_collider.enabled = false;
 }
 
 fn check_for_collision(
-    flappy_query: Query<&Transform, With<Flappy>>,
+    flappy_query: Query<(&Transform, &FlappyCollider), With<Flappy>>,
     collider_query: Query<(&GlobalTransform, &Collider)>,
     mut run_state: ResMut<State<GameState>>,
 ) {
-    let flappy_transform = flappy_query.single();
+    let (flappy_transform, flappy_collider) = flappy_query.single();
 
     for (collider_transform, collider) in &collider_query {
         let collider_translation = collider_transform.translation();
@@ -131,7 +145,7 @@ fn check_for_collision(
             *collider.scale(),
         );
 
-        if collision.is_some() {
+        if collision.is_some() && flappy_collider.enabled {
             run_state.set(GameState::GameOver).unwrap();
         }
     }

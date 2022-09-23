@@ -2,5 +2,4 @@
 pub enum GameState {
     Playing,
     GameOver,
-    Cleanup,
 }
