@@ -1,7 +1,7 @@
 use crate::velocity::Velocity;
 use bevy::prelude::*;
 
-const GRAVITY: f32 = 40.0;
+const GRAVITY: f32 = 2400.0;
 
 #[derive(Component)]
 pub struct GravityAffected;
@@ -14,8 +14,8 @@ impl Plugin for GravityPlugin {
     }
 }
 
-fn apply_gravity(mut query: Query<(&mut Velocity, &GravityAffected)>) {
+fn apply_gravity(time: Res<Time>, mut query: Query<(&mut Velocity, &GravityAffected)>) {
     for (mut velocity, _) in query.iter_mut() {
-        velocity.y -= GRAVITY;
+        velocity.y -= GRAVITY * time.delta_seconds();
     }
 }
