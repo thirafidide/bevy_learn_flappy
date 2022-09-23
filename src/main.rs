@@ -21,7 +21,7 @@ use crate::animation::AnimationPlugin;
 use crate::flappy::Flappy;
 use crate::floor::{Floor, FloorPlugin};
 use crate::game_state::*;
-use crate::pipe::{Pipe, PipeBundle, PIPE_WIDTH};
+use crate::pipe::{PipeBundle, PIPE_WIDTH};
 use crate::velocity::Velocity;
 use crate::window::*;
 
@@ -147,37 +147,21 @@ fn camera_side_scroll(time: Res<Time>, mut query: Query<&mut Transform, With<Cam
 fn pipe_side_scroll(
     mut commands: Commands,
     camera_query: Query<&Transform, With<Camera2d>>,
-    pipes_query: Query<(Entity, &Transform), (With<Pipe>, Without<Camera2d>)>,
+    pipe_sets_query: Query<(Entity, &Transform), (With<PipeSet>, Without<Camera2d>)>,
 ) {
     let camera_transform = camera_query.single();
 
-    // when a pipe moved out of sight, mark it to be despawned
-    let mut pipes_to_remove: Vec<(Entity, &Transform)> = Vec::new();
-    for (pipe_entity, pipe_transform) in &pipes_query {
+    // when a pipe moved out of sight, despawn it and spawn a new one at the back
+    for (pipe_sets_entity, pipe_transform) in &pipe_sets_query {
         let pipe_right_edge_position = pipe_transform.translation.x + (PIPE_WIDTH / 2.0);
         let camera_left_edge_position = camera_transform.translation.x - (WINDOW_WIDTH / 2.0);
 
         if pipe_right_edge_position + WINDOW_BOUND_LIMIT < camera_left_edge_position {
-            pipes_to_remove.push((pipe_entity, pipe_transform));
+            let new_gap_position_x =
+                pipe_transform.translation.x + PIPE_DISTANCE * (PIPE_SET_ENTITY_COUNT as f32);
+
+            PipeBundle::spawn_set(&mut commands, new_gap_position_x);
+            commands.entity(pipe_sets_entity).despawn_recursive();
         }
-    }
-
-    // if there is pipes that is out of sight, spawn a new set
-    // we need 2 pipes as we should remove a set to spawn a new set
-    if pipes_to_remove.len() == 2 {
-        let last_pipe_position_x = pipes_to_remove[0].1.translation.x;
-
-        // 2 pipes should be in a same set
-        assert!(
-            (pipes_to_remove[0].1.translation.x - pipes_to_remove[1].1.translation.x).abs()
-                < f32::EPSILON
-        );
-
-        for (pipe_entity, _) in pipes_to_remove {
-            commands.entity(pipe_entity).despawn();
-        }
-
-        let gap_position_x = last_pipe_position_x + PIPE_DISTANCE * (PIPE_SET_ENTITY_COUNT as f32);
-        PipeBundle::spawn_set(&mut commands, gap_position_x);
     }
 }
