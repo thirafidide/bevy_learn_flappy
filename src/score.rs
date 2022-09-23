@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::{flappy::Flappy, game_state::GameState};
 
-// TODO duplicate from main.rs, remove once score update
+// TODO duplicate from pipe.rs, remove once score update
 // refactored to do proper update on gap collusion
 const PIPE_DISTANCE: f32 = 350.0;
 const DISTANCE_TO_FIRST_PIPE: f32 = 500.0;

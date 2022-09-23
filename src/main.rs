@@ -2,7 +2,7 @@ use bevy::{prelude::*, render::texture::ImageSettings};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use flappy::{FlappyCollider, FlappyPlugin};
 use gravity::GravityPlugin;
-use pipe::PipeSet;
+use pipe::{PipePlugin, PipeSet};
 use score::ScorePlugin;
 use velocity::VelocityPlugin;
 
@@ -21,7 +21,6 @@ use crate::animation::AnimationPlugin;
 use crate::flappy::Flappy;
 use crate::floor::{Floor, FloorPlugin};
 use crate::game_state::*;
-use crate::pipe::{PipeBundle, PIPE_WIDTH};
 use crate::velocity::Velocity;
 use crate::window::*;
 
@@ -29,10 +28,6 @@ const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
 const FLAPPY_STARTING_VELOCITY: Vec2 = Vec2::new(SCROLLING_SPEED, 0.0);
-
-const PIPE_SET_ENTITY_COUNT: u32 = 3;
-const PIPE_DISTANCE: f32 = 350.0;
-const DISTANCE_TO_FIRST_PIPE: f32 = 500.0;
 
 fn main() {
     App::new()
@@ -50,15 +45,12 @@ fn main() {
         .add_plugin(VelocityPlugin)
         .add_plugin(GravityPlugin)
         .add_plugin(FloorPlugin)
+        .add_plugin(PipePlugin)
         .add_plugin(FlappyPlugin)
         .add_plugin(ScorePlugin)
         .add_startup_system(setup)
         .add_state(GameState::Playing)
-        .add_system_set(
-            SystemSet::on_update(GameState::Playing)
-                .with_system(camera_side_scroll)
-                .with_system(pipe_side_scroll),
-        )
+        .add_system_set(SystemSet::on_update(GameState::Playing).with_system(camera_side_scroll))
         .add_system_set(SystemSet::on_update(GameState::GameOver).with_system(gameover_input))
         .add_system_set(SystemSet::on_exit(GameState::GameOver).with_system(reset_setup))
         .run();
@@ -67,13 +59,6 @@ fn main() {
 //
 // -- SETUP
 //
-
-fn setup_pipes(commands: &mut Commands) {
-    for i in 0..PIPE_SET_ENTITY_COUNT {
-        let gap_position_x = DISTANCE_TO_FIRST_PIPE + (PIPE_DISTANCE * (i as f32));
-        PipeBundle::spawn_set(commands, gap_position_x)
-    }
-}
 
 fn setup(
     mut commands: Commands,
@@ -93,7 +78,7 @@ fn setup(
     );
 
     floor::setup(&mut commands);
-    setup_pipes(&mut commands);
+    pipe::setup(&mut commands);
 }
 
 fn reset_setup(
@@ -123,7 +108,7 @@ fn reset_setup(
     flappy_velocity.0 = FLAPPY_STARTING_VELOCITY;
 
     floor::setup(&mut commands);
-    setup_pipes(&mut commands);
+    pipe::setup(&mut commands);
 
     flappy_collider.enabled = true;
 }
@@ -142,26 +127,4 @@ fn camera_side_scroll(time: Res<Time>, mut query: Query<&mut Transform, With<Cam
     let mut camera_transform = query.single_mut();
 
     camera_transform.translation.x += SCROLLING_SPEED * time.delta_seconds();
-}
-
-fn pipe_side_scroll(
-    mut commands: Commands,
-    camera_query: Query<&Transform, With<Camera2d>>,
-    pipe_sets_query: Query<(Entity, &Transform), (With<PipeSet>, Without<Camera2d>)>,
-) {
-    let camera_transform = camera_query.single();
-
-    // when a pipe moved out of sight, despawn it and spawn a new one at the back
-    for (pipe_sets_entity, pipe_transform) in &pipe_sets_query {
-        let pipe_right_edge_position = pipe_transform.translation.x + (PIPE_WIDTH / 2.0);
-        let camera_left_edge_position = camera_transform.translation.x - (WINDOW_WIDTH / 2.0);
-
-        if pipe_right_edge_position + WINDOW_BOUND_LIMIT < camera_left_edge_position {
-            let new_gap_position_x =
-                pipe_transform.translation.x + PIPE_DISTANCE * (PIPE_SET_ENTITY_COUNT as f32);
-
-            PipeBundle::spawn_set(&mut commands, new_gap_position_x);
-            commands.entity(pipe_sets_entity).despawn_recursive();
-        }
-    }
 }
