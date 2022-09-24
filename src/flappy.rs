@@ -5,6 +5,8 @@ use crate::animation::{Animation, AnimationReplayEvent};
 use crate::collider::Collider;
 use crate::game_state::GameState;
 use crate::gravity::GravityAffected;
+use crate::pipe::PipeGap;
+use crate::score::Scoreboard;
 use crate::velocity::{ApplyVelocitySystem, Velocity};
 use crate::window::*;
 
@@ -123,13 +125,15 @@ fn flappy_forward_stop(mut query: Query<(&mut Velocity, &mut FlappyCollider), Wi
 }
 
 fn check_for_collision(
-    flappy_query: Query<(&Transform, &FlappyCollider), With<Flappy>>,
-    collider_query: Query<(&GlobalTransform, &Collider)>,
+    mut commands: Commands,
+    mut scoreboard: ResMut<Scoreboard>,
     mut run_state: ResMut<State<GameState>>,
+    flappy_query: Query<(&Transform, &FlappyCollider), With<Flappy>>,
+    collider_query: Query<(Entity, &GlobalTransform, &Collider, Option<&PipeGap>)>,
 ) {
     let (flappy_transform, flappy_collider) = flappy_query.single();
 
-    for (collider_transform, collider) in &collider_query {
+    for (collider_entity, collider_transform, collider, maybe_pipe_gap) in &collider_query {
         let collider_translation = collider_transform.translation();
         let collider_relative_position = collider.position();
         let collider_position = Vec3::new(
@@ -146,7 +150,12 @@ fn check_for_collision(
         );
 
         if collision.is_some() && flappy_collider.enabled {
-            run_state.set(GameState::GameOver).unwrap();
+            if maybe_pipe_gap.is_some() {
+                scoreboard.update_current_score(1);
+                commands.entity(collider_entity).despawn();
+            } else {
+                run_state.set(GameState::GameOver).unwrap();
+            }
         }
     }
 }

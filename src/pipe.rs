@@ -130,6 +130,37 @@ impl PipeBundle {
 }
 
 #[derive(Component)]
+pub struct PipeGap;
+
+#[derive(Bundle)]
+pub struct PipeGapBundle {
+    pipe_gap: PipeGap,
+    #[bundle]
+    sprite: SpriteBundle,
+    collider: Collider,
+}
+
+impl PipeGapBundle {
+    fn new(position_y: f32) -> Self {
+        let gap_scale = Vec3::new(PIPE_GAP * 0.35, PIPE_GAP, 0.0);
+
+        PipeGapBundle {
+            pipe_gap: PipeGap,
+            sprite: SpriteBundle {
+                transform: Transform {
+                    translation: Vec3::new(0.0, position_y, 1.0),
+                    scale: gap_scale,
+                    ..default()
+                },
+                visibility: Visibility { is_visible: false },
+                ..default()
+            },
+            collider: Collider::new(gap_scale.truncate()),
+        }
+    }
+}
+
+#[derive(Component)]
 pub struct PipeSet;
 
 #[derive(Bundle)]
@@ -142,7 +173,7 @@ pub struct PipeSetBundle {
 }
 
 impl PipeSetBundle {
-    fn new(position_x: f32) -> PipeSetBundle {
+    fn new(position_x: f32) -> Self {
         PipeSetBundle {
             pipe_set: PipeSet,
             transform: TransformBundle::from_transform(Transform::from_translation(Vec3::new(
@@ -175,6 +206,11 @@ impl PipeSetBundle {
                     .spawn()
                     .insert(Name::new("Bottom Pipe"))
                     .insert_bundle(bottom_pipe);
+
+                parent
+                    .spawn()
+                    .insert(Name::new("Pipe Gap"))
+                    .insert_bundle(PipeGapBundle::new(gap_position.y));
             });
     }
 }

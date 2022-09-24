@@ -1,11 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{flappy::Flappy, game_state::GameState};
-
-// TODO duplicate from pipe.rs, remove once score update
-// refactored to do proper update on gap collusion
-const PIPE_DISTANCE: f32 = 350.0;
-const DISTANCE_TO_FIRST_PIPE: f32 = 500.0;
+use crate::game_state::GameState;
 
 #[derive(Debug, Clone)]
 pub struct Scoreboard {
@@ -21,8 +16,9 @@ impl Scoreboard {
         }
     }
 
-    fn update_current_score(&mut self, new_score: u32) {
-        self.current_score = new_score;
+    pub fn update_current_score(&mut self, increment: u32) {
+        self.current_score += increment;
+        println!("{}", self.current_score);
     }
 
     fn update_best_score(&mut self) {
@@ -40,9 +36,7 @@ pub struct ScorePlugin;
 
 impl Plugin for ScorePlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Scoreboard::new()).add_system_set(
-            SystemSet::on_update(GameState::Playing).with_system(update_current_score),
-        );
+        app.insert_resource(Scoreboard::new());
         app.add_system_set(SystemSet::on_enter(GameState::GameOver).with_system(update_best_score));
         app.add_system_set(
             SystemSet::on_exit(GameState::GameOver).with_system(reset_current_score),
@@ -52,17 +46,6 @@ impl Plugin for ScorePlugin {
 
 fn reset_current_score(mut scoreboard: ResMut<Scoreboard>) {
     scoreboard.reset_current_score();
-}
-
-fn update_current_score(
-    mut scoreboard: ResMut<Scoreboard>,
-    flappy_query: Query<&Transform, With<Flappy>>,
-) {
-    let flappy_transform = flappy_query.single();
-
-    scoreboard.update_current_score(
-        ((flappy_transform.translation.x - DISTANCE_TO_FIRST_PIPE) / PIPE_DISTANCE).round() as u32,
-    );
 }
 
 fn update_best_score(mut scoreboard: ResMut<Scoreboard>) {
