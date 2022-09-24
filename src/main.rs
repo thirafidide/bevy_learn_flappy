@@ -39,6 +39,7 @@ fn main() {
         })
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(ImageSettings::default_nearest())
+        .insert_resource(Msaa { samples: 1 })
         .add_plugins(DefaultPlugins)
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(AnimationPlugin)
