@@ -8,7 +8,7 @@ use crate::gravity::GravityAffected;
 use crate::pipe::PipeGap;
 use crate::score::Scoreboard;
 use crate::velocity::{ApplyVelocitySystem, Velocity};
-use crate::window::*;
+use crate::{window::*, SCROLLING_SPEED};
 
 const FLAPPY_SPRITE_SIZE: f32 = 24.0;
 const FLAPPY_SPRITE_SCALE: Vec3 = Vec3::splat(2.0);
@@ -37,6 +37,9 @@ impl Plugin for FlappyPlugin {
         use bevy::transform::TransformSystem;
 
         app.add_system_set(
+            SystemSet::on_enter(GameState::Playing).with_system(flappy_setup_playing),
+        );
+        app.add_system_set(
             SystemSet::on_update(GameState::Playing)
                 .with_system(flappy_jump)
                 .with_system(flappy_limit_movement.after(ApplyVelocitySystem)),
@@ -58,7 +61,6 @@ pub fn spawn(
     asset_server: Res<AssetServer>,
     mut texture_atlas_map: ResMut<Assets<TextureAtlas>>,
     position: Vec3,
-    velocity: Vec2,
 ) {
     let texture_handle = asset_server.load("characters.png");
     let texture_atlas =
@@ -69,8 +71,8 @@ pub fn spawn(
         .spawn()
         .insert(Name::new("Flappy"))
         .insert(Flappy)
-        .insert(Velocity(velocity))
-        .insert(GravityAffected)
+        .insert(Velocity(Vec2::ZERO))
+        .insert(GravityAffected(false))
         .insert(FlappyCollider { enabled: true })
         .insert_bundle(SpriteSheetBundle {
             texture_atlas: texture_atlas_handle,
@@ -86,7 +88,7 @@ pub fn spawn(
             ..default()
         })
         .insert(Animation {
-            timer: Timer::from_seconds(0.3, false),
+            timer: Timer::from_seconds(0.3, true),
             frames: vec![25, 26, 24],
             current_frame: 0,
         });
@@ -95,6 +97,16 @@ pub fn spawn(
 //
 // -- System
 //
+
+fn flappy_setup_playing(
+    mut query: Query<(&mut Velocity, &mut GravityAffected, &mut Animation), With<Flappy>>,
+) {
+    let (mut velocity, mut gravity_affected, mut animation) = query.single_mut();
+
+    velocity.0 = Vec2::new(SCROLLING_SPEED, 0.0);
+    gravity_affected.0 = true;
+    animation.timer.set_repeating(false);
+}
 
 fn flappy_jump(
     mut replay_event: EventWriter<AnimationReplayEvent>,

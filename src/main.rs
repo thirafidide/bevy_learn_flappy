@@ -1,7 +1,7 @@
 use bevy::{prelude::*, render::texture::ImageSettings};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use flappy::{FlappyCollider, FlappyPlugin};
-use gravity::GravityPlugin;
+use gravity::{GravityAffected, GravityPlugin};
 use pipe::{PipePlugin, PipeSet};
 use score::ScorePlugin;
 use velocity::VelocityPlugin;
@@ -27,7 +27,6 @@ use crate::window::*;
 const SCROLLING_SPEED: f32 = 150.0;
 
 const FLAPPY_STARTING_POSITION: Vec3 = Vec2::ZERO.extend(1.0);
-const FLAPPY_STARTING_VELOCITY: Vec2 = Vec2::new(SCROLLING_SPEED, 0.0);
 
 fn main() {
     App::new()
@@ -50,8 +49,15 @@ fn main() {
         .add_plugin(FlappyPlugin)
         .add_plugin(ScorePlugin)
         .add_startup_system(setup)
-        .add_state(GameState::Playing)
+        .add_state(GameState::Intro)
+        .add_system_set(
+            SystemSet::on_enter(GameState::Intro).with_system(reset_menu_transition_delay),
+        )
+        .add_system_set(SystemSet::on_update(GameState::Intro).with_system(intro_input))
         .add_system_set(SystemSet::on_update(GameState::Playing).with_system(camera_side_scroll))
+        .add_system_set(
+            SystemSet::on_enter(GameState::GameOver).with_system(reset_menu_transition_delay),
+        )
         .add_system_set(SystemSet::on_update(GameState::GameOver).with_system(gameover_input))
         .add_system_set(SystemSet::on_exit(GameState::GameOver).with_system(reset_setup))
         .run();
@@ -61,6 +67,16 @@ fn main() {
 // -- SETUP
 //
 
+#[derive(Component)]
+struct MenuTransitionDelay {
+    timer: Timer,
+}
+
+fn reset_menu_transition_delay(mut delay_query: Query<&mut MenuTransitionDelay>) {
+    let mut delay = delay_query.single_mut();
+    delay.timer.reset();
+}
+
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -69,13 +85,16 @@ fn setup(
     // Camera
     commands.spawn_bundle(Camera2dBundle::default());
 
+    commands.spawn().insert(MenuTransitionDelay {
+        timer: Timer::from_seconds(0.45, false),
+    });
+
     // Flappy
     flappy::spawn(
         &mut commands,
         asset_server,
         texture_atlas_map,
         FLAPPY_STARTING_POSITION,
-        FLAPPY_STARTING_VELOCITY,
     );
 
     floor::setup(&mut commands);
@@ -85,7 +104,15 @@ fn setup(
 fn reset_setup(
     mut commands: Commands,
     mut camera_query: Query<&mut Transform, (With<Camera2d>, Without<Flappy>)>,
-    mut flappy_query: Query<(&mut Transform, &mut Velocity, &mut FlappyCollider), With<Flappy>>,
+    mut flappy_query: Query<
+        (
+            &mut Transform,
+            &mut Velocity,
+            &mut FlappyCollider,
+            &mut GravityAffected,
+        ),
+        With<Flappy>,
+    >,
     floor_query: Query<Entity, With<Floor>>,
     pipe_set_query: Query<Entity, With<PipeSet>>,
 ) {
@@ -98,7 +125,7 @@ fn reset_setup(
     }
 
     let mut camera_transform = camera_query.single_mut();
-    let (mut flappy_transform, mut flappy_velocity, mut flappy_collider) =
+    let (mut flappy_transform, mut flappy_velocity, mut flappy_collider, mut flappy_gravity) =
         flappy_query.single_mut();
 
     let default_transform = Camera2dBundle::default().transform;
@@ -106,7 +133,8 @@ fn reset_setup(
 
     flappy_transform.translation = FLAPPY_STARTING_POSITION;
     flappy_transform.rotation = Quat::default();
-    flappy_velocity.0 = FLAPPY_STARTING_VELOCITY;
+    flappy_velocity.0 = Vec2::ZERO;
+    flappy_gravity.0 = false;
 
     floor::setup(&mut commands);
     pipe::setup(&mut commands);
@@ -118,9 +146,31 @@ fn reset_setup(
 // -- SYSTEM
 //
 
-fn gameover_input(keyboard_input: Res<Input<KeyCode>>, mut run_state: ResMut<State<GameState>>) {
-    if keyboard_input.just_pressed(KeyCode::Space) {
-        _ = run_state.set(GameState::Playing);
+fn intro_input(
+    time: Res<Time>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut run_state: ResMut<State<GameState>>,
+    mut delay_query: Query<&mut MenuTransitionDelay>,
+) {
+    let mut delay = delay_query.single_mut();
+    delay.timer.tick(time.delta());
+
+    if keyboard_input.just_pressed(KeyCode::Space) && delay.timer.finished() {
+        run_state.set(GameState::Playing).unwrap();
+    }
+}
+
+fn gameover_input(
+    time: Res<Time>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut run_state: ResMut<State<GameState>>,
+    mut delay_query: Query<&mut MenuTransitionDelay>,
+) {
+    let mut delay = delay_query.single_mut();
+    delay.timer.tick(time.delta());
+
+    if keyboard_input.just_pressed(KeyCode::Space) && delay.timer.finished() {
+        run_state.set(GameState::Intro).unwrap();
     }
 }
 
